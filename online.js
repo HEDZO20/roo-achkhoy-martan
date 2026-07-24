@@ -47,7 +47,8 @@
 
   const onlineCSS = `
     body.roo-online #roleSelect, body.roo-online label[for="roleSelect"], body.roo-online .login-options,
-    body.roo-online #quickRoleSwitcher, body.roo-online #resetDemoButton, body.roo-online #resetDemoFromLogin { display:none !important; }
+    body.roo-online #quickRoleSwitcher, body.roo-online #resetDemoButton, body.roo-online #resetDemoFromLogin,
+    body.roo-online #demoRoleLoginLabel, body.roo-online #demoRoleProfileLabel { display:none !important; }
     body.roo-online .login-card-head span:last-child{font-weight:700;color:#23663b}
     .roo-online-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
     .roo-online-actions button{min-height:44px;border-radius:13px;border:1px solid var(--border,#dce6d7);background:rgba(255,255,255,.68);font-weight:700;cursor:pointer}
@@ -63,9 +64,27 @@
     @keyframes roo-spin{to{transform:rotate(360deg)}}
   `;
 
+
+  function hideLegacyDemoControls(){
+    const hideNode=(node)=>{ if(node){ node.hidden=true; node.style.display='none'; node.setAttribute('aria-hidden','true'); } };
+    const loginRole=document.getElementById('roleSelect');
+    hideNode(loginRole);
+    hideNode(document.getElementById('demoRoleLoginLabel'));
+    if(loginRole?.previousElementSibling?.tagName==='LABEL') hideNode(loginRole.previousElementSibling);
+
+    const quickRole=document.getElementById('quickRoleSwitcher');
+    hideNode(quickRole);
+    hideNode(document.getElementById('demoRoleProfileLabel'));
+    if(quickRole?.previousElementSibling?.tagName==='LABEL') hideNode(quickRole.previousElementSibling);
+
+    hideNode(document.getElementById('resetDemoButton'));
+    hideNode(document.getElementById('resetDemoFromLogin'));
+  }
+
   function injectStyle(){
     const style=document.createElement('style'); style.textContent=onlineCSS; document.head.appendChild(style);
     document.body.classList.add('roo-online');
+    hideLegacyDemoControls();
   }
 
   function setLoginState(message, type=''){
@@ -119,16 +138,17 @@
     const stateBox=document.createElement('div');
     stateBox.id='rooOnlineState'; stateBox.className='roo-online-state'; stateBox.textContent='Проверка подключения к Supabase…';
     form.appendChild(stateBox);
-    document.querySelector('.login-card-head span:last-child').textContent='ONLINE V11 · общая база и исправленный редактор';
+    document.querySelector('.login-card-head span:last-child').textContent='ONLINE V21 · рабочая онлайн-система';
   }
 
   function updateVersionUI(){
-    const version=document.getElementById('versionButton'); if(version)version.textContent='V11';
-    const head=document.querySelector('.login-card-head span:last-child'); if(head)head.textContent='ONLINE V11 · Supabase подключён';
+    hideLegacyDemoControls();
+    const version=document.getElementById('versionButton'); if(version)version.textContent='V21';
+    const head=document.querySelector('.login-card-head span:last-child'); if(head)head.textContent='ONLINE V21 · Supabase подключён';
     const banner=document.getElementById('systemUpdateBanner');
     if(banner){
       const strong=banner.querySelector('strong'); const small=banner.querySelector('small');
-      if(strong)strong.textContent='Онлайн-система V11';
+      if(strong)strong.textContent='Онлайн-система V21';
       if(small)small.textContent='Данные хранятся в Supabase и доступны пользователям с разных устройств.';
     }
     const top=document.querySelector('.v5-header-brand');

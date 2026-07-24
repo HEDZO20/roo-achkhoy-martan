@@ -43,12 +43,12 @@
       <div class="login-card glass-card">
         <div class="login-card-head">
           <span class="status-dot"></span>
-          <span>ONLINE V15 · GitHub Pages + Supabase</span>
+          <span>ONLINE V21 · GitHub Pages + Supabase</span>
         </div>
         <h2>Вход в систему</h2>
         <p class="muted">Выберите должность, чтобы проверить реальные различия в правах.</p>
         <form id="loginForm">
-          <label>Демонстрационная роль</label>
+          <label id="demoRoleLoginLabel" for="roleSelect">Демонстрационная роль</label>
           <select id="roleSelect" class="large-select">
             <option value="chief">Начальник РОО</option>
             <option value="deputy">Заместитель начальника РОО</option>
@@ -173,7 +173,7 @@
           <div class="avatar large" id="profileAvatar">МА</div>
           <div><strong id="profileName">Магомед А.</strong><span id="profilePosition">Начальник РОО</span></div>
         </div>
-        <label>Переключить демо-роль</label>
+        <label id="demoRoleProfileLabel" for="quickRoleSwitcher">Переключить демо-роль</label>
         <select id="quickRoleSwitcher">
           <option value="chief">Начальник РОО</option>
           <option value="deputy">Заместитель начальника РОО</option>
@@ -437,7 +437,7 @@
             <div class="report-builder-grid">
               <label>Тип отчёта<select id="reportType"><option>Исполнительская дисциплина</option><option>Анализ ГИА</option><option>Просрочки по отделам</option><option>Рейтинг школ</option><option>Свод по форме поручения</option></select></label>
               <label>Период<select id="reportPeriod"><option>Июль 2026</option><option>Июнь 2026</option><option>2025–2026 учебный год</option></select></label>
-              <label>Формат<select id="reportFormat"><option>Excel (.csv в демо)</option><option>PDF (предпросмотр)</option></select></label>
+              <label>Формат<select id="reportFormat"><option>Excel / CSV</option><option>PDF (предпросмотр)</option></select></label>
               <button class="primary-button" id="generateReportButton">Сформировать</button>
             </div>
           </article>

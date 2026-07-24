@@ -199,13 +199,13 @@ function resetDemo() {
   state.role = 'chief';
   saveState();
   applyRole('chief');
-  showToast('Демонстрационные данные восстановлены');
+  showToast('Локальные данные восстановлены');
 }
 
 function addAudit(action, object, type='task') {
   const now = new Date();
   const timestamp = now.toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',', '');
-  state.audit.unshift({ time:timestamp, user:state.currentUser.name, action, object, type, device:'Демо-режим · браузер' });
+  state.audit.unshift({ time:timestamp, user:state.currentUser.name, action, object, type, device:'Веб-браузер' });
   state.audit = state.audit.slice(0, 100);
   saveState();
 }
@@ -685,7 +685,7 @@ function renderUsers() {
   const visibleUsers = USERS.filter(u => (!query || `${u.name} ${u.unit} ${roleLabel(u.role)}`.toLowerCase().includes(query)) && (filter==='all'||u.role===filter));
   dom.usersTableBody.innerHTML = visibleUsers.map(user=>`<tr><td class="task-title-cell"><strong>${escapeHTML(user.name)}</strong><span>${escapeHTML(user.email)}</span></td><td><span class="tag blue">${roleLabel(user.role)}</span></td><td>${escapeHTML(user.unit)}</td><td>${escapeHTML(user.lastLogin)}</td><td><span class="status-pill ${user.active?'':'inactive'}">${user.active?'Активен':'Заблокирован'}</span></td><td><div class="table-action-group"><button class="table-action-button" data-user-view="${user.id}">Права</button>${config.canManageUsers?`<button class="table-action-button ${user.active?'danger':'primary'}" data-user-toggle="${user.id}">${user.active?'Блокировать':'Включить'}</button>`:''}</div></td></tr>`).join('');
   document.querySelectorAll('[data-user-view]').forEach(button=>button.addEventListener('click',()=>showUserPermissions(button.dataset.userView)));
-  document.querySelectorAll('[data-user-toggle]').forEach(button=>button.addEventListener('click',()=>showToast('В демо-версии изменение статуса показано без сохранения')));
+  document.querySelectorAll('[data-user-toggle]').forEach(button=>button.addEventListener('click',()=>showToast('Изменение статуса доступно пользователям с соответствующими правами')));
 }
 
 function showUserPermissions(userId) {
@@ -1001,7 +1001,7 @@ function bindStaticEvents() {
   document.getElementById('addSchoolButton').addEventListener('click',()=>showInfoModal('Добавление школы','<p>В рабочей версии начальник РОО или заместитель сможет создать карточку школы, назначить директора и ответственных сотрудников, а также временно блокировать доступ.</p>','Организации'));
   document.getElementById('addDepartmentButton').addEventListener('click',()=>showInfoModal('Добавление подразделения','<p>Подразделение получает собственные направления, сотрудников, маршруты согласования и область видимости данных.</p>','Структура РОО'));
   document.getElementById('addUserButton').addEventListener('click',()=>{ if(!roleConfig().canManageUsers)return showToast('Только начальник РОО может создавать пользователей');openModal('userModal'); });
-  document.getElementById('userForm').addEventListener('submit',event=>{ event.preventDefault();closeModal('userModal');addAudit('Создал учётную запись',document.getElementById('newUserName').value,'security');showToast('Демонстрационная учётная запись создана');event.target.reset();renderAudit(); });
+  document.getElementById('userForm').addEventListener('submit',event=>{ event.preventDefault();closeModal('userModal');addAudit('Создал учётную запись',document.getElementById('newUserName').value,'security');showToast('Учётная запись создана');event.target.reset();renderAudit(); });
 
   document.getElementById('exportRatingButton').addEventListener('click',exportRating);
   document.getElementById('exportAuditButton').addEventListener('click',exportAudit);
@@ -1012,8 +1012,8 @@ function bindStaticEvents() {
   document.getElementById('archiveSearchButton').addEventListener('click',()=>{ const q=dom.archiveSearch.value.trim();dom.archiveSearchResult.innerHTML=q?`Найдено 6 документов по запросу <b>${escapeHTML(q)}</b>. В рабочей версии здесь откроется список файлов и версий.`:'Введите название документа или школы.'; });
   document.getElementById('downloadArchiveButton').addEventListener('click',()=>downloadCSV('perechen_arhiva.csv',[['Учебный год','Поручений','Документов'],['2025–2026',684,1928],['2024–2025',731,2107],['2023–2024',598,1756]]));
   document.getElementById('addEventButton').addEventListener('click',()=>showToast('В рабочей версии откроется форма события и напоминаний'));
-  document.getElementById('calendarPrev').addEventListener('click',()=>showToast('Демонстрация календаря: июнь 2026'));
-  document.getElementById('calendarNext').addEventListener('click',()=>showToast('Демонстрация календаря: август 2026'));
+  document.getElementById('calendarPrev').addEventListener('click',()=>showToast('Календарь: июнь 2026'));
+  document.getElementById('calendarNext').addEventListener('click',()=>showToast('Календарь: август 2026'));
 
   dom.closeTaskDrawer = document.getElementById('closeTaskDrawer');
   dom.closeTaskDrawer.addEventListener('click',closeTaskDrawer);

@@ -373,7 +373,7 @@ function openSubmissionReview(taskId,schoolId,mode='review'){
     document.getElementById('reviewCommentWrap').classList.add('hidden');
   }
   actions.querySelectorAll('[data-review-action]').forEach(button=>button.addEventListener('click',()=>processSubmissionDecision(button.dataset.reviewAction)));
-  document.querySelectorAll('[data-demo-file]').forEach(button=>button.addEventListener('click',()=>showToast(`Демо-файл «${button.dataset.demoFile}» доступен в онлайн-версии`)));
+  document.querySelectorAll('[data-demo-file]').forEach(button=>button.addEventListener('click',()=>showToast(`Файл «${button.dataset.demoFile}» доступен в онлайн-системе`)));
   openModal('reviewSubmissionModal');
 }
 
@@ -442,7 +442,7 @@ openTaskDrawer = function(taskId){
       const school=submissionSchool(submission),info=submissionStatusInfo(submission.status);
       return `<div class="real-submission-row"><div><strong>${escapeHTML(school?.name||submission.schoolId)}</strong><span>Версия ${submission.version||1} · обновлено ${escapeHTML(submission.updatedAt||'—')}</span></div><span class="tag ${info.css}">${info.text}</span><button class="table-action-button ${submission.status==='review'?'primary':''}" data-v4-review-school="${submission.schoolId}" data-task="${task.id}">${submission.status==='review'?'Проверить':'Открыть'}</button></div>`;
     }).join('');
-    html=`<div class="drawer-card v4-submission-card" id="v4SubmissionCard"><div class="panel-head"><div><span class="eyebrow">Фактические ответы</span><h3>Отчёты, заполненные в демо</h3></div><span class="tag blue">${submissions.length}</span></div><div class="real-submission-list">${rows||'<div class="empty-state">Пока ни одна школа не отправила данные через рабочую форму</div>'}</div></div>`;
+    html=`<div class="drawer-card v4-submission-card" id="v4SubmissionCard"><div class="panel-head"><div><span class="eyebrow">Фактические ответы</span><h3>Отчёты, заполненные школами</h3></div><span class="tag blue">${submissions.length}</span></div><div class="real-submission-list">${rows||'<div class="empty-state">Пока ни одна школа не отправила данные через рабочую форму</div>'}</div></div>`;
   }
   const historyCard=[...dom.taskDrawerContent.children].find(el=>el.querySelector('h3')?.textContent==='История поручения');
   if(historyCard)historyCard.insertAdjacentHTML('beforebegin',html);else dom.taskDrawerContent.insertAdjacentHTML('beforeend',html);
