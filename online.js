@@ -1,6 +1,6 @@
 'use strict';
 
-/* ONLINE V23 — подключение интерфейса к Supabase. */
+/* ONLINE V24 — подключение интерфейса к Supabase, качество данных и история импортов. */
 (() => {
   const cfg = window.ROO_SUPABASE_CONFIG;
   if (!cfg || !window.supabase?.createClient) {
@@ -138,17 +138,17 @@
     const stateBox=document.createElement('div');
     stateBox.id='rooOnlineState'; stateBox.className='roo-online-state'; stateBox.textContent='Проверка подключения к Supabase…';
     form.appendChild(stateBox);
-    document.querySelector('.login-card-head span:last-child').textContent='ONLINE V23 · рабочая онлайн-система';
+    document.querySelector('.login-card-head span:last-child').textContent='ONLINE V24 · рабочая онлайн-система';
   }
 
   function updateVersionUI(){
     hideLegacyDemoControls();
-    const version=document.getElementById('versionButton'); if(version)version.textContent='V23';
-    const head=document.querySelector('.login-card-head span:last-child'); if(head)head.textContent='ONLINE V23 · Supabase подключён';
+    const version=document.getElementById('versionButton'); if(version)version.textContent='V24';
+    const head=document.querySelector('.login-card-head span:last-child'); if(head)head.textContent='ONLINE V24 · Supabase подключён';
     const banner=document.getElementById('systemUpdateBanner');
     if(banner){
       const strong=banner.querySelector('strong'); const small=banner.querySelector('small');
-      if(strong)strong.textContent='Онлайн-система V23';
+      if(strong)strong.textContent='Онлайн-система V24';
       if(small)small.textContent='Данные хранятся в Supabase и доступны пользователям с разных устройств.';
     }
     const top=document.querySelector('.v5-header-brand');
@@ -174,7 +174,7 @@
   }
 
   function installProfile(profile, session){
-    currentProfile=profile; currentSession=session; state.role=profile.role;
+    currentProfile=profile; currentSession=session; state.role=profile.role; window.ROOCurrentProfile=profile; window.ROOCurrentSession=session;
     const id=`remote-${profile.id}`;
     const user={
       id, role:profile.role, name:profile.full_name||profile.email, initials:initials(profile.full_name||profile.email),
@@ -309,8 +309,21 @@
     return {
       id:row.source_row_id||row.id,year:row.academic_year,name:row.student_name,school:schoolMap.get(row.school_id)||row.school_id,
       className:row.class_name||'',exam:row.exam_type,subject:row.subject,score:row.score===null?'':Number(row.score),grade:row.grade||'',
-      status:row.result_status||'Сдал',lateMinutes:Number(row.late_minutes||0),source:'Supabase',_remoteId:row.id,schoolId:row.school_id
+      status:row.result_status||'Сдал',lateMinutes:Number(row.late_minutes||0),period:row.period||'Основной',source:'Supabase',_remoteId:row.id,schoolId:row.school_id,importId:row.import_id||null,createdAt:row.created_at||null
     };
+  }
+
+  async function fetchAllExamResults(){
+    const pageSize=1000;let from=0;const all=[];
+    while(true){
+      const {data,error}=await client.from('exam_results').select('*').order('created_at',{ascending:false}).range(from,from+pageSize-1);
+      if(error)return {data:null,error};
+      const batch=data||[];all.push(...batch);
+      if(batch.length<pageSize)break;
+      from+=pageSize;
+      if(from>=100000)return {data:all,error:null};
+    }
+    return {data:all,error:null};
   }
 
   async function loadRemoteData({silent=false}={}){
@@ -325,7 +338,7 @@
       client.from('submission_versions').select('*').order('created_at',{ascending:false}),
       client.from('files').select('*').order('created_at',{ascending:false}),
       client.from('audit_log').select('*').order('created_at',{ascending:false}).limit(100),
-      client.from('exam_results').select('*').order('created_at',{ascending:false}).limit(15000),
+      fetchAllExamResults(),
       client.from('department_performance').select('*'),
       client.from('design_settings').select('settings,updated_at').eq('id',1).maybeSingle()
     ]);
@@ -386,8 +399,11 @@
     populateDirectionSelects();
     renderAll();
     v7PopulateExamFilters?.(); v7RenderExams?.(); v7RenderDepartments?.();
+    document.dispatchEvent(new CustomEvent('roo-online-data-loaded'));
     if(!silent)setLoginState('Подключение установлено. Данные загружены.');
   }
+
+  window.ROOReloadOnlineData = async function(){ await loadRemoteData({silent:true}); return true; };
 
   function showSetupRequired(details=''){
     onlineReady=false;
@@ -466,7 +482,7 @@
   async function logout(event){
     event?.preventDefault(); event?.stopImmediatePropagation();
     await client.auth.signOut();
-    onlineReady=false;currentProfile=null;currentSession=null;
+    onlineReady=false;currentProfile=null;currentSession=null;window.ROOCurrentProfile=null;window.ROOCurrentSession=null;
     document.getElementById('app')?.classList.add('hidden');
     document.getElementById('loginScreen')?.classList.remove('hidden');
     setLoginState('Вы вышли из системы.');
@@ -681,7 +697,18 @@
   function minutesLate(scheduled,arrival,explicit){const e=Number(String(explicit||'').replace(',','.').replace(/[^0-9.-]/g,''));if(Number.isFinite(e)&&e>0)return Math.round(e);if(!scheduled||!arrival)return 0;const [sh,sm]=scheduled.split(':').map(Number),[ah,am]=arrival.split(':').map(Number);return Math.max(0,(ah*60+am)-(sh*60+sm));}
   function normalizeSchoolName(value){return String(value||'').replace(/[«»"']/g,'').replace(/\s+/g,' ').trim().toLowerCase();}
   function slugId(value){const translit={'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ж':'zh','з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'h','ц':'c','ч':'ch','ш':'sh','щ':'sch','ы':'y','э':'e','ю':'yu','я':'ya','ь':'','ъ':''};return 'school-'+normalizeSchoolName(value).split('').map(c=>translit[c]??c).join('').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,52)+'-'+Math.abs([...String(value)].reduce((a,c)=>((a<<5)-a+c.charCodeAt(0))|0,0));}
-  function sourceRowId(r,index,fileName){const raw=[r.academic_year,r.exam_type,r.school,r.student_name,r.class_name,r.subject,r.score,r.grade,r.result_status,fileName,index].join('|');let h=2166136261;for(const ch of raw){h^=ch.charCodeAt(0);h=Math.imul(h,16777619);}return `exam-${(h>>>0).toString(16)}-${index}`;}
+  function examIdentityKey(r){
+    return [r.academic_year,r.exam_type,r.period||'Основной',normalizeSchoolName(r.school),normalizeHeader(r.student_name),normalizeHeader(r.class_name),normalizeHeader(r.subject)].join('|');
+  }
+  function examValueKey(r){
+    return [examIdentityKey(r),r.score??'',r.grade??'',normalizeHeader(r.result_status),Number(r.late_minutes||0)].join('|');
+  }
+  function fastHash(value){let h=2166136261;for(const ch of String(value)){h^=ch.charCodeAt(0);h=Math.imul(h,16777619);}return (h>>>0).toString(16).padStart(8,'0');}
+  function sourceRowId(r){return `exam-${fastHash(examIdentityKey(r))}`;}
+  function matrixFingerprint(matrix,file){
+    const sample=matrix.map(row=>row.map(v=>String(v??'').trim()).join('\u001f')).join('\u001e');
+    return `fnv1a-${fastHash(`${file.size}|${sample}`)}`;
+  }
 
   async function readExamMatrix(file){
     if(/\.(xlsx|xls)$/i.test(file.name)){
@@ -701,9 +728,18 @@
     const required=['student_name','school'];
     const missing=required.filter(k=>detected.map[k]===undefined);
     if(missing.length)throw new Error('Не удалось распознать обязательные колонки: ФИО и Школа. Используйте шаблон или переименуйте заголовки.');
-    const rows=[],issues=[];
+    const rows=[],issues=[],rejectedRows=[];
+    const existingByIdentity=new Map();
+    (v7ExamRows||[]).forEach(row=>{
+      const normalized={academic_year:row.year,exam_type:row.exam,period:row.period||'Основной',school:row.school,student_name:row.name,class_name:row.className,subject:row.subject,score:row.score===''?null:Number(row.score),grade:row.grade===''?null:Number(row.grade),result_status:row.status,late_minutes:Number(row.lateMinutes||0)};
+      existingByIdentity.set(examIdentityKey(normalized),normalized);
+    });
+    const seenInFile=new Map();
+    let dataRowCount=0,duplicateCount=0,conflictCount=0;
     matrix.slice(detected.index+1).forEach((raw,i)=>{
       if(!raw.some(v=>String(v).trim()))return;
+      dataRowCount++;
+      const sourceLine=i+detected.index+2;
       const student_name=cell(raw,detected.map,'student_name');
       const school=cell(raw,detected.map,'school');
       const subject=cell(raw,detected.map,'subject');
@@ -715,57 +751,122 @@
       let grade=gradeRaw===''?null:Number(gradeRaw.replace(/[^2-5]/g,''));
       let result_status=statusRaw||((score!==null&&Number.isFinite(score))?'Сдал':'Не явился');
       if(/не\s*сдал|неуд/i.test(result_status))result_status='Не сдал'; else if(/не\s*яв|отсут/i.test(result_status))result_status='Не явился'; else result_status='Сдал';
-      if(grade===null&&score!==null&&Number.isFinite(score)){grade=v7Grade(score,result_status);issues.push({row:i+detected.index+2,type:'warning',text:`Оценка рассчитана автоматически по общей шкале для ${student_name}. Для точности лучше добавить колонку «Оценка».`});}
+      if(grade===null&&score!==null&&Number.isFinite(score)){
+        grade=v7Grade(score,result_status);
+        issues.push({row:sourceLine,type:'warning',code:'AUTO_GRADE',text:`Оценка рассчитана автоматически по общей шкале для ${student_name||'ученика'}. Для официального анализа лучше добавить колонку «Оценка».`});
+      }
       const scheduled=parseTime(cell(raw,detected.map,'scheduled_time')),arrival=parseTime(cell(raw,detected.map,'arrival_time'));
-      const r={academic_year:cell(raw,detected.map,'academic_year')||defaultAcademicYear(),exam_type,period:cell(raw,detected.map,'period')||'Основной',school,student_name,class_name:cell(raw,detected.map,'class_name'),subject,score:Number.isFinite(score)?score:null,grade:Number.isFinite(grade)?grade:null,result_status,scheduled_time:scheduled,arrival_time:arrival,late_minutes:minutesLate(scheduled,arrival,cell(raw,detected.map,'late_minutes'))};
-      const errs=[];if(!student_name)errs.push('нет ФИО');if(!school)errs.push('нет школы');if(!subject)errs.push('нет предмета');if(!exam_type)errs.push('не определён тип экзамена');if(score!==null&&!Number.isFinite(score))errs.push('некорректный балл');if(r.score!==null&&(r.score<0||r.score>400))errs.push('балл вне допустимого диапазона');
-      if(errs.length)issues.push({row:i+detected.index+2,type:'error',text:`${student_name||'Строка'}: ${errs.join(', ')}`});else rows.push(r);
+      const r={academic_year:cell(raw,detected.map,'academic_year')||defaultAcademicYear(),exam_type,period:cell(raw,detected.map,'period')||'Основной',school,student_name,class_name:cell(raw,detected.map,'class_name'),subject,score:Number.isFinite(score)?score:null,grade:Number.isFinite(grade)?grade:null,result_status,scheduled_time:scheduled,arrival_time:arrival,late_minutes:minutesLate(scheduled,arrival,cell(raw,detected.map,'late_minutes')),source_line:sourceLine};
+      const errs=[];
+      if(!student_name)errs.push('нет ФИО');
+      if(!school)errs.push('нет школы');
+      if(!subject)errs.push('нет предмета');
+      if(!exam_type)errs.push('не определён тип экзамена');
+      if(scoreRaw!==''&&!Number.isFinite(score))errs.push('некорректный балл');
+      if(r.score!==null&&(r.score<0||r.score>100))errs.push('балл вне диапазона 0–100');
+      if(r.grade!==null&&![2,3,4,5].includes(r.grade))errs.push('оценка должна быть от 2 до 5');
+      if(result_status==='Не явился'&&r.score!==null)issues.push({row:sourceLine,type:'warning',code:'ABSENT_WITH_SCORE',text:`${student_name}: указан балл при статусе «Не явился». Проверьте строку.`});
+      if(errs.length){
+        const issue={row:sourceLine,type:'error',code:'INVALID_ROW',text:`${student_name||'Строка'}: ${errs.join(', ')}`};issues.push(issue);rejectedRows.push({...r,reason:issue.text});return;
+      }
+      const identity=examIdentityKey(r),values=examValueKey(r);
+      const sameFile=seenInFile.get(identity);
+      if(sameFile){
+        duplicateCount++;
+        const exact=examValueKey(sameFile)===values;
+        const issue={row:sourceLine,type:exact?'warning':'error',code:exact?'DUPLICATE_IN_FILE':'CONFLICT_IN_FILE',text:exact?`${student_name}: точная повторная строка в этом файле пропущена.`:`${student_name}: в файле есть две строки одного экзамена с разными значениями. Обе требуют проверки.`};
+        issues.push(issue);rejectedRows.push({...r,reason:issue.text});if(!exact)conflictCount++;return;
+      }
+      const existing=existingByIdentity.get(identity);
+      if(existing){
+        duplicateCount++;
+        const exact=examValueKey(existing)===values;
+        const issue={row:sourceLine,type:exact?'warning':'error',code:exact?'ALREADY_IMPORTED':'CONFLICT_EXISTING',text:exact?`${student_name}: такой результат уже есть в базе и повторно не импортирован.`:`${student_name}: в базе уже есть результат этого экзамена с другими значениями. Сначала проверьте историю импортов или отмените ошибочную загрузку.`};
+        issues.push(issue);rejectedRows.push({...r,reason:issue.text});if(!exact)conflictCount++;return;
+      }
+      seenInFile.set(identity,r);
+      r.source_row_id=sourceRowId(r);
+      rows.push(r);
     });
-    rows.forEach((r,i)=>r.source_row_id=sourceRowId(r,i,file.name));
     const known=new Map(SCHOOLS.map(s=>[normalizeSchoolName(s.name),s]));
     const unknown=[...new Set(rows.map(r=>r.school).filter(n=>!known.has(normalizeSchoolName(n))))];
-    return {file,detected,rows,issues,unknown};
+    const errorCount=issues.filter(x=>x.type==='error').length;
+    const warningCount=issues.filter(x=>x.type==='warning').length;
+    return {file,fileHash:matrixFingerprint(matrix,file),detected,rows,issues,unknown,totalRows:dataRowCount,rejectedRows,duplicateCount,conflictCount,errorCount,warningCount};
+  }
+
+  async function checkPreviouslyImportedFile(prepared){
+    try{
+      const {data,error}=await client.from('exam_imports').select('id,source_file,status,created_at').eq('file_hash',prepared.fileHash).in('status',['processing','completed','partial']).limit(1);
+      if(error){
+        if(/file_hash|status|schema cache/i.test(error.message||''))return prepared;
+        throw error;
+      }
+      if(data?.length){
+        const previous=data[0];
+        prepared.blockedReason=`Этот файл уже был загружен ранее (${previous.source_file||prepared.file.name}). Откройте «Историю импортов» и проверьте предыдущую загрузку.`;
+        prepared.issues.unshift({row:'—',type:'error',code:'DUPLICATE_FILE',text:prepared.blockedReason});
+        prepared.errorCount+=1;
+      }
+    }catch(error){console.warn('Не удалось проверить отпечаток файла',error);}
+    return prepared;
   }
 
   function showExamImportPreview(prepared){
     pendingExamImport=prepared;
-    const errors=prepared.issues.filter(x=>x.type==='error').length,warnings=prepared.issues.filter(x=>x.type==='warning').length;
     const recognized=Object.keys(prepared.detected.map).map(k=>`<span class="tag green">${escapeHTML(k)}</span>`).join(' ');
     const unknown=prepared.unknown.length?`<div class="roo-setup-panel"><b>Новые школы (${prepared.unknown.length})</b><p>${prepared.unknown.map(escapeHTML).join('<br>')}</p>${['chief','deputy'].includes(currentProfile?.role)?'<label><input type="checkbox" id="rooCreateUnknownSchools" checked> Создать эти школы автоматически</label>':'<p>Начальник отдела не может создавать школы. Попросите руководство добавить их.</p>'}</div>`:'';
-    showInfoModal('Предпросмотр импорта',`<div class="summary-grid"><div><strong>${prepared.rows.length}</strong><span>готово к импорту</span></div><div><strong>${errors}</strong><span>ошибок</span></div><div><strong>${warnings}</strong><span>предупреждений</span></div><div><strong>${prepared.unknown.length}</strong><span>новых школ</span></div></div><div class="drawer-card"><h3>Распознанные поля</h3><div class="v7-column-tags">${recognized}</div></div>${unknown}<div class="drawer-card"><h3>Первые строки</h3><div style="overflow:auto"><table class="compact-table"><thead><tr><th>ФИО</th><th>Школа</th><th>Экзамен</th><th>Предмет</th><th>Балл</th><th>Оценка</th></tr></thead><tbody>${prepared.rows.slice(0,8).map(r=>`<tr><td>${escapeHTML(r.student_name)}</td><td>${escapeHTML(r.school)}</td><td>${r.exam_type}</td><td>${escapeHTML(r.subject)}</td><td>${r.score??'—'}</td><td>${r.grade??'—'}</td></tr>`).join('')}</tbody></table></div></div>${prepared.issues.length?`<div class="drawer-card"><h3>Проверка</h3>${prepared.issues.slice(0,20).map(x=>`<p class="${x.type==='error'?'delta-down':'muted'}">Строка ${x.row}: ${escapeHTML(x.text)}</p>`).join('')}</div>`:''}<button class="primary-button full" id="rooConfirmExamImport" ${(!prepared.rows.length||(!['chief','deputy'].includes(currentProfile?.role)&&prepared.unknown.length))?'disabled':''}>Подтвердить импорт</button>`,'Автоматическое распознавание Excel');
+    const issuePreview=prepared.issues.slice(0,30).map(x=>`<p class="${x.type==='error'?'delta-down':'muted'}"><b>Строка ${x.row}</b> · ${escapeHTML(x.text)}</p>`).join('');
+    const warnings=prepared.warningCount?`<div class="v24-import-warning"><b>Предупреждения: ${prepared.warningCount}.</b> Они не блокируют корректные строки, но должны быть проверены.</div>`:'';
+    const errors=prepared.errorCount?`<div class="v24-import-error"><b>Ошибки: ${prepared.errorCount}.</b> ${prepared.blockedReason?escapeHTML(prepared.blockedReason):'Ошибочные и конфликтующие строки не будут сохранены.'}</div>`:'';
+    showInfoModal('Предпросмотр импорта',`<div class="v24-import-preview-summary"><div><strong>${prepared.totalRows}</strong><span>строк в файле</span></div><div><strong>${prepared.rows.length}</strong><span>готово</span></div><div><strong>${prepared.rejectedRows.length}</strong><span>отклонено</span></div><div><strong>${prepared.duplicateCount}</strong><span>дубли</span></div><div><strong>${prepared.unknown.length}</strong><span>новых школ</span></div></div>${errors}${warnings}<div class="drawer-card"><h3>Распознанные поля</h3><div class="v7-column-tags">${recognized}</div><p class="muted">Строка заголовков: ${prepared.detected.index+1}. Отпечаток файла: ${escapeHTML(prepared.fileHash)}.</p></div>${unknown}<div class="drawer-card"><h3>Первые корректные строки</h3><div style="overflow:auto"><table class="compact-table"><thead><tr><th>ФИО</th><th>Школа</th><th>Экзамен</th><th>Предмет</th><th>Балл</th><th>Оценка</th></tr></thead><tbody>${prepared.rows.slice(0,8).map(r=>`<tr><td>${escapeHTML(r.student_name)}</td><td>${escapeHTML(r.school)}</td><td>${r.exam_type}</td><td>${escapeHTML(r.subject)}</td><td>${r.score??'—'}</td><td>${r.grade??'—'}</td></tr>`).join('')||'<tr><td colspan="6">Нет строк, готовых к импорту</td></tr>'}</tbody></table></div></div>${prepared.issues.length?`<div class="drawer-card"><h3>Протокол проверки</h3>${issuePreview}${prepared.issues.length>30?`<p class="muted">Показаны первые 30 из ${prepared.issues.length} замечаний. Полный протокол сохранится в истории импорта.</p>`:''}</div>`:''}<label class="v6-checkbox"><input type="checkbox" id="rooImportValidOnly" checked> Сохранить только строки, прошедшие проверку</label><button class="primary-button full" id="rooConfirmExamImport" ${(!prepared.rows.length||prepared.blockedReason||(!['chief','deputy'].includes(currentProfile?.role)&&prepared.unknown.length))?'disabled':''}>Подтвердить безопасный импорт</button>`,'Автоматическая проверка Excel / CSV');
     setTimeout(()=>document.getElementById('rooConfirmExamImport')?.addEventListener('click',confirmExamImport),0);
   }
 
   async function ensureImportSchools(prepared){
     const existing=new Map(SCHOOLS.map(s=>[normalizeSchoolName(s.name),s]));
+    const createdSchoolIds=[];
     if(prepared.unknown.length){
       if(!['chief','deputy'].includes(currentProfile?.role)||!document.getElementById('rooCreateUnknownSchools')?.checked)throw new Error('Сначала добавьте неизвестные школы в справочник.');
       const inserts=prepared.unknown.map(name=>({id:slugId(name),name,locality:'',director_name:'',responsible_name:'',rating:null,metadata:{created_from_exam_import:true}}));
       const {error}=await client.from('schools').upsert(inserts,{onConflict:'id'});if(error)throw error;
-      inserts.forEach(s=>existing.set(normalizeSchoolName(s.name),{id:s.id,name:s.name}));
+      inserts.forEach(s=>{existing.set(normalizeSchoolName(s.name),{id:s.id,name:s.name});createdSchoolIds.push(s.id);});
     }
-    return existing;
+    return {schools:existing,createdSchoolIds};
   }
 
   async function confirmExamImport(){
     const prepared=pendingExamImport;if(!prepared)return;
     const button=document.getElementById('rooConfirmExamImport');if(button){button.disabled=true;button.innerHTML='<span class="roo-sync-spinner"></span> Импорт';}
+    let importId=null;
     try{
-      const schools=await ensureImportSchools(prepared);
+      if(!document.getElementById('rooImportValidOnly')?.checked&&prepared.rejectedRows.length)throw new Error('Для безопасности включите импорт только строк, прошедших проверку.');
+      const {schools,createdSchoolIds}=await ensureImportSchools(prepared);
       const first=prepared.rows[0];
-      const {data:imp,error:impErr}=await client.from('exam_imports').insert({academic_year:first.academic_year,exam_type:first.exam_type,subject:[...new Set(prepared.rows.map(r=>r.subject))].length===1?first.subject:null,period:first.period,source_file:prepared.file.name,imported_rows:prepared.rows.length,errors_count:prepared.issues.filter(x=>x.type==='error').length,uploaded_by:currentProfile.id}).select('id').single();if(impErr)throw impErr;
-      const payload=prepared.rows.map(r=>({import_id:imp.id,source_row_id:r.source_row_id,academic_year:r.academic_year,exam_type:r.exam_type,period:r.period,school_id:schools.get(normalizeSchoolName(r.school))?.id,student_name:r.student_name,class_name:r.class_name,subject:r.subject,score:r.score,grade:r.grade,result_status:r.result_status,scheduled_time:r.scheduled_time,arrival_time:r.arrival_time,late_minutes:r.late_minutes,passed:r.result_status==='Сдал'&&r.grade!==2,metadata:{source_file:prepared.file.name,automatic_mapping:true}})).filter(r=>r.school_id);
-      for(let i=0;i<payload.length;i+=400){const {error}=await client.from('exam_results').upsert(payload.slice(i,i+400),{onConflict:'source_row_id'});if(error)throw error;}
-      await insertAudit('Импортировал результаты экзаменов','exam_import',imp.id,{object:prepared.file.name,rows:payload.length,warnings:prepared.issues.length});
-      closeModal('infoModal');pendingExamImport=null;await loadRemoteData({silent:true});navigate('exams');showToast(`Импортировано ${payload.length} строк. Аналитика обновлена.`);
-    }catch(error){onlineError(error,'Не удалось импортировать файл');if(button){button.disabled=false;button.textContent='Повторить импорт';}}
+      const importRecord={academic_year:first.academic_year,exam_type:first.exam_type,subject:[...new Set(prepared.rows.map(r=>r.subject))].length===1?first.subject:null,period:first.period,source_file:prepared.file.name,imported_rows:0,accepted_rows:prepared.rows.length,rejected_rows:prepared.rejectedRows.length,errors_count:prepared.errorCount,warnings_count:prepared.warningCount,duplicates_count:prepared.duplicateCount,unknown_schools_count:prepared.unknown.length,file_hash:prepared.fileHash,status:'processing',mapping:{header_row:prepared.detected.index+1,columns:prepared.detected.map},issues:prepared.issues,metadata:{total_rows:prepared.totalRows,created_school_ids:createdSchoolIds,client_version:24},uploaded_by:currentProfile.id};
+      const {data:imp,error:impErr}=await client.from('exam_imports').insert(importRecord).select('id').single();
+      if(impErr){if(/accepted_rows|warnings_count|file_hash|schema cache/i.test(impErr.message||''))throw new Error('В Supabase ещё не выполнен PATCH_V24_DATA_QUALITY.sql. Запустите SQL-патч и повторите импорт.');throw impErr;}
+      importId=imp.id;
+      const payload=prepared.rows.map(r=>({import_id:importId,source_row_id:r.source_row_id,academic_year:r.academic_year,exam_type:r.exam_type,period:r.period,school_id:schools.get(normalizeSchoolName(r.school))?.id,student_name:r.student_name,class_name:r.class_name,subject:r.subject,score:r.score,grade:r.grade,result_status:r.result_status,scheduled_time:r.scheduled_time,arrival_time:r.arrival_time,late_minutes:r.late_minutes,passed:r.result_status==='Сдал'&&r.grade!==2,metadata:{source_file:prepared.file.name,automatic_mapping:true,source_line:r.source_line,file_hash:prepared.fileHash}})).filter(r=>r.school_id);
+      for(let i=0;i<payload.length;i+=400){const {error}=await client.from('exam_results').insert(payload.slice(i,i+400));if(error)throw error;}
+      const {error:finishError}=await client.from('exam_imports').update({status:prepared.rejectedRows.length?'partial':'completed',imported_rows:payload.length,accepted_rows:payload.length,metadata:{...importRecord.metadata,completed_at:new Date().toISOString()}}).eq('id',importId);
+      if(finishError)throw finishError;
+      await insertAudit('Импортировал результаты экзаменов','exam_import',importId,{object:prepared.file.name,rows:payload.length,rejected:prepared.rejectedRows.length,duplicates:prepared.duplicateCount,warnings:prepared.warningCount});
+      closeModal('infoModal');pendingExamImport=null;await loadRemoteData({silent:true});document.dispatchEvent(new CustomEvent('roo-exam-import-changed'));navigate('exams');showToast(`Импортировано ${payload.length} строк. Отклонено: ${prepared.rejectedRows.length}.`);
+    }catch(error){
+      if(importId){
+        await client.from('exam_results').delete().eq('import_id',importId);
+        await client.from('exam_imports').update({status:'failed',metadata:{failed_at:new Date().toISOString(),error:String(error?.message||error)}}).eq('id',importId);
+      }
+      onlineError(error,'Не удалось импортировать файл');if(button){button.disabled=false;button.textContent='Повторить импорт';}
+    }
   }
 
   async function importExamFileV10(event){
     const file=event.target.files?.[0];if(!file)return;
     event.preventDefault();event.stopImmediatePropagation();
     const status=document.getElementById('examImportStatus');
-    try{if(status){status.textContent='Чтение и распознавание файла…';status.classList.remove('error');}const matrix=await readExamMatrix(file);const prepared=prepareExamImport(matrix,file);if(status)status.textContent=`Распознано ${prepared.rows.length} строк. Проверьте предпросмотр.`;showExamImportPreview(prepared);}catch(error){if(status){status.textContent=error.message;status.classList.add('error');}onlineError(error,'Не удалось прочитать файл');}finally{event.target.value='';}
+    try{if(status){status.textContent='Чтение и распознавание файла…';status.classList.remove('error');}const matrix=await readExamMatrix(file);const prepared=await checkPreviouslyImportedFile(prepareExamImport(matrix,file));if(status)status.textContent=prepared.blockedReason?'Файл уже был загружен. Откройте историю импортов.':`Готово: ${prepared.rows.length}. Отклонено: ${prepared.rejectedRows.length}. Дубли: ${prepared.duplicateCount}.`;showExamImportPreview(prepared);}catch(error){if(status){status.textContent=error.message;status.classList.add('error');}onlineError(error,'Не удалось прочитать файл');}finally{event.target.value='';}
   }
 
   async function createInvitation(event){
@@ -872,7 +973,7 @@
     }catch(error){setLoginState(onlineError(error),'error');}
     client.auth.onAuthStateChange((event,session)=>{
       if(event==='SIGNED_IN'&&session&&!onlineReady)setTimeout(()=>bootOnline(session),0);
-      if(event==='SIGNED_OUT'){onlineReady=false;currentProfile=null;currentSession=null;}
+      if(event==='SIGNED_OUT'){onlineReady=false;currentProfile=null;currentSession=null;window.ROOCurrentProfile=null;window.ROOCurrentSession=null;}
       if(event==='PASSWORD_RECOVERY'){
         const password=prompt('Введите новый пароль (минимум 6 символов):','');
         if(password&&password.length>=6)client.auth.updateUser({password}).then(({error})=>setLoginState(error?error.message:'Пароль изменён. Войдите в систему.',error?'error':''));

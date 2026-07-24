@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="v7.css" />
   <link rel="stylesheet" href="v6.css" />
   <link rel="stylesheet" href="v22.css" />
+  <link rel="stylesheet" href="v24.css" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -44,7 +45,7 @@
       <div class="login-card glass-card">
         <div class="login-card-head">
           <span class="status-dot"></span>
-          <span>ONLINE V23 · GitHub Pages + Supabase</span>
+          <span>ONLINE V24 · GitHub Pages + Supabase</span>
         </div>
         <h2>Вход в систему</h2>
         <p class="muted">Введите рабочую почту и пароль. Права назначаются администратором системы.</p>
@@ -148,7 +149,7 @@
             <input id="globalSearch" type="search" placeholder="Поиск по системе..." />
           </div>
           <button class="command-button v5-command" id="commandButton" title="Быстрый поиск и команды"><span>⌕</span><kbd>Ctrl K</kbd></button>
-          <button class="round-button update-indicator v5-utility" id="versionButton" title="Версия системы">V23</button>
+          <button class="round-button update-indicator v5-utility" id="versionButton" title="Версия системы">V24</button>
           <button class="round-button v5-utility" id="themeButton" title="Переключить тему">◐</button>
           <button class="round-button notification-button v5-notification" id="notificationButton" title="Уведомления">♢<b id="notificationCount">4</b></button>
           <button id="visualEditorFab" class="v6-editor-fab hidden" title="Открыть визуальный редактор"><span>✦</span><b>Дизайн</b></button>
@@ -360,7 +361,7 @@
 
           <div class="v7-exam-toolbar panel">
             <div class="v7-filter-grid">
-              <label>Учебный год<select id="examYearFilter"><option>2025/2026</option><option>2024/2025</option><option>2023/2024</option></select></label>
+              <label>Учебный год<select id="examYearFilter"><option value="all">Все годы</option><option>2025/2026</option><option>2024/2025</option><option>2023/2024</option></select></label>
               <label>Экзамен<select id="examTypeFilter"><option value="all">Все экзамены</option><option>ЕГЭ</option><option>ОГЭ</option><option>ГИА</option></select></label>
               <label>Предмет<select id="examSubjectFilter"><option value="all">Все предметы</option></select></label>
               <label>Школа<select id="examSchoolFilter"><option value="all">Все школы</option></select></label>
@@ -374,7 +375,8 @@
             <button class="active" data-exam-tab="overview">Общий анализ</button>
             <button data-exam-tab="students">Пофамильный список</button>
             <button data-exam-tab="schools">Сравнение школ</button>
-            <button data-exam-tab="quality">Ошибки и качество данных</button>
+            <button data-exam-tab="quality">Центр качества данных</button>
+            <button class="hidden" data-exam-tab="history">История импортов <span id="examHistoryBadge" class="v24-tab-badge hidden">0</span></button>
           </div>
 
           <div class="v7-exam-panel active" data-exam-panel="overview">
@@ -397,7 +399,25 @@
           </div>
 
           <div class="v7-exam-panel" data-exam-panel="quality">
-            <div class="v7-quality-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">Проверка загрузки</span><h3>Ошибки и предупреждения</h3></div></div><div id="examQualityList"></div></article><article class="panel"><div class="panel-head"><div><span class="eyebrow">Формат файла</span><h3>Как правильно загрузить данные</h3></div></div><ol class="v7-instruction-list"><li>Загрузите Excel (XLSX/XLS) или CSV с результатами.</li><li>Сайт сам найдёт заголовки и распознает распространённые названия колонок.</li><li>Проверьте предпросмотр, ошибки и неизвестные школы.</li><li>Подтвердите импорт — таблицы, показатели и графики заполнятся автоматически.</li></ol><div class="v7-column-tags"><span>ФИО</span><span>Школа</span><span>Класс</span><span>Экзамен</span><span>Предмет</span><span>Балл</span><span>Оценка</span><span>Статус</span><span>Опоздание</span></div><p class="muted">Поддерживаются XLSX, XLS и CSV. Если названия колонок нестандартные, система покажет, какие поля не удалось распознать.</p></article></div>
+            <div id="examQualitySummary" class="v24-quality-summary"></div>
+            <div class="v24-quality-toolbar panel">
+              <div><span class="eyebrow">Контроль достоверности</span><h3>Центр качества данных</h3><p>Система проверяет полноту, точные дубли, неизвестные школы, баллы, оценки и историю загрузок.</p></div>
+              <div class="heading-actions"><button class="secondary-button" id="examQualityExport">Скачать отчёт проверки</button><button class="primary-button" id="examQualityRefresh">Проверить заново</button></div>
+            </div>
+            <div class="v24-quality-layout">
+              <article class="panel"><div class="panel-head"><div><span class="eyebrow">Результат проверки</span><h3>Ошибки и предупреждения</h3></div><div id="examQualityState" class="v24-quality-state"></div></div><div id="examQualityList"></div></article>
+              <article class="panel"><div class="panel-head"><div><span class="eyebrow">Повторные сведения</span><h3>Точные дубли</h3></div><span id="examDuplicateCount" class="muted"></span></div><div id="examDuplicateList"></div></article>
+            </div>
+            <article class="panel v24-quality-guide"><div class="panel-head"><div><span class="eyebrow">Правильный импорт</span><h3>Что проверяется до сохранения</h3></div></div><div class="v24-guide-grid"><div><b>1. Структура</b><span>Поиск строки заголовков и автоматическое сопоставление колонок.</span></div><div><b>2. Обязательные поля</b><span>ФИО, школа, экзамен и предмет должны быть заполнены.</span></div><div><b>3. Дубли</b><span>Повторные строки в файле и уже загруженные результаты не импортируются.</span></div><div><b>4. Контроль значений</b><span>Проверяются баллы, оценки, статусы, даты и время прибытия.</span></div></div><div class="v7-column-tags"><span>ФИО</span><span>Школа</span><span>Класс</span><span>Экзамен</span><span>Предмет</span><span>Балл</span><span>Оценка</span><span>Статус</span><span>Опоздание</span></div></article>
+          </div>
+
+          <div class="v7-exam-panel" data-exam-panel="history">
+            <div id="examHistorySummary" class="v24-history-summary"></div>
+            <article class="panel">
+              <div class="panel-head"><div><span class="eyebrow">Журнал загрузок</span><h3>История импортов экзаменационных данных</h3></div><div class="heading-actions"><button class="secondary-button" id="examHistoryRefresh">Обновить</button></div></div>
+              <div class="v24-history-notice"><b>Безопасная отмена:</b> при отмене удаляются только результаты выбранной загрузки. Остальные импорты, школы и пользователи не затрагиваются.</div>
+              <div class="table-wrap"><table class="data-table v24-history-table"><thead><tr><th>Дата</th><th>Файл</th><th>Экзамен</th><th>Принято</th><th>Отклонено</th><th>Дубли</th><th>Статус</th><th>Автор</th><th></th></tr></thead><tbody id="examImportHistoryBody"><tr><td colspan="9" class="empty-state">История загружается…</td></tr></tbody></table></div>
+            </article>
           </div>
         </section>
 
@@ -804,5 +824,6 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="online.js"></script>
   <script src="v22.js"></script>
+  <script src="v24.js"></script>
 </body>
 </html>

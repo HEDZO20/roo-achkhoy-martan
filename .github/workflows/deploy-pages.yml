@@ -31,8 +31,8 @@ jobs:
           set -euo pipefail
           mkdir -p _site/assets
           cp index.html manifest.webmanifest _site/
-          cp styles.css v3.css v4.css v5.css v6.css v7.css v22.css _site/
-          cp app.js v3.js v4.js v5.js v6.js v7.js v22.js config.js online.js _site/
+          cp styles.css v3.css v4.css v5.css v6.css v7.css v22.css v24.css _site/
+          cp app.js v3.js v4.js v5.js v6.js v7.js v22.js v24.js config.js online.js _site/
           cp assets/*.svg _site/assets/
           cp "ШАБЛОН_РЕЗУЛЬТАТОВ_ЭКЗАМЕНОВ.csv" _site/
           cp index.html _site/404.html

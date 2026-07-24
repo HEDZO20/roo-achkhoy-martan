@@ -86,11 +86,13 @@ function v7VisibleExamRows(){
   if(state.role==='school_director' || state.role==='school_staff'){
     const own=currentSchool(); if(own) rows=rows.filter(r=>r.school===own.name);
   }
+  const year=document.getElementById('examYearFilter')?.value||'all';
   const type=document.getElementById('examTypeFilter')?.value||'all';
   const subject=document.getElementById('examSubjectFilter')?.value||'all';
   const school=document.getElementById('examSchoolFilter')?.value||'all';
   const status=document.getElementById('examStatusFilter')?.value||'all';
   const query=(document.getElementById('examStudentSearch')?.value||'').trim().toLowerCase();
+  if(year!=='all') rows=rows.filter(r=>r.year===year);
   if(type!=='all') rows=rows.filter(r=>r.exam===type);
   if(subject!=='all') rows=rows.filter(r=>r.subject===subject);
   if(school!=='all') rows=rows.filter(r=>r.school===school);
@@ -106,17 +108,19 @@ function v7ExamStats(rows){
   const failed=rows.filter(r=>v7StatusKey(r)==='failed').length;
   const absent=rows.filter(r=>v7StatusKey(r)==='absent').length;
   const late=rows.filter(r=>Number(r.lateMinutes)>0).length;
-  const avg=scores.length?scores.reduce((a,b)=>a+b,0)/scores.length:0;
-  const max=scores.length?Math.max(...scores):0;
-  const min=scores.length?Math.min(...scores):0;
+  const avg=scores.length?scores.reduce((a,b)=>a+b,0)/scores.length:null;
+  const max=scores.length?Math.max(...scores):null;
+  const min=scores.length?Math.min(...scores):null;
   const grades=[5,4,3,2].reduce((acc,g)=>(acc[g]=rows.filter(r=>Number(r.grade)===g).length,acc),{});
-  return {total:rows.length,present:present.length,passed,failed,absent,late,avg,max,min,grades,passRate:present.length?passed/present.length*100:0,quality:present.length?(grades[5]+grades[4])/present.length*100:0};
+  return {total:rows.length,present:present.length,passed,failed,absent,late,avg,max,min,grades,passRate:present.length?passed/present.length*100:null,quality:present.length?(grades[5]+grades[4])/present.length*100:null};
 }
 function v7PopulateExamFilters(){
-  const subjectEl=document.getElementById('examSubjectFilter');const schoolEl=document.getElementById('examSchoolFilter');if(!subjectEl||!schoolEl)return;
-  const currentSubject=subjectEl.value,currentSchoolValue=schoolEl.value;
+  const yearEl=document.getElementById('examYearFilter');const subjectEl=document.getElementById('examSubjectFilter');const schoolEl=document.getElementById('examSchoolFilter');if(!subjectEl||!schoolEl)return;
+  const currentYear=yearEl?.value||'all',currentSubject=subjectEl.value,currentSchoolValue=schoolEl.value;
+  const years=[...new Set(v7ExamRows.map(r=>r.year).filter(Boolean))].sort().reverse();
   const subjects=[...new Set(v7ExamRows.map(r=>r.subject).filter(Boolean))].sort();
   const schools=[...new Set(v7ExamRows.map(r=>r.school).filter(Boolean))].sort();
+  if(yearEl){yearEl.innerHTML='<option value="all">Все годы</option>'+years.map(v=>`<option>${v7Esc(v)}</option>`).join('');if(years.includes(currentYear))yearEl.value=currentYear;else yearEl.value='all';}
   subjectEl.innerHTML='<option value="all">Все предметы</option>'+subjects.map(v=>`<option>${v7Esc(v)}</option>`).join('');
   schoolEl.innerHTML='<option value="all">Все школы</option>'+schools.map(v=>`<option>${v7Esc(v)}</option>`).join('');
   if(subjects.includes(currentSubject))subjectEl.value=currentSubject;
@@ -130,10 +134,10 @@ function v7RenderExams(){
   const rows=v7VisibleExamRows();const stats=v7ExamStats(rows);
   const kpis=[
     ['◉',stats.total,'Результатов в выборке',`${stats.present} участников`, '#e2f1dd','#2a7040'],
-    ['✓',`${stats.passRate.toFixed(1)}%`,'Успешно сдали',`${stats.passed} результатов`, '#d9efdd','#246a3a'],
-    ['∑',stats.avg.toFixed(1),'Средний балл',`Максимум ${stats.max}`, '#e1eee7','#39766a'],
+    ['✓',stats.passRate===null?'—':`${stats.passRate.toFixed(1)}%`,'Успешно сдали',stats.present?`${stats.passed} результатов`:'Нет данных', '#d9efdd','#246a3a'],
+    ['∑',stats.avg===null?'—':stats.avg.toFixed(1),'Средний балл',stats.max===null?'Нет данных':`Максимум ${stats.max}`, '#e1eee7','#39766a'],
     ['!',stats.failed,'Не сдали',`${stats.absent} не явились`, '#fde0dc','#b43c3c'],
-    ['◷',stats.late,'Опоздания',stats.late?'Требуют контроля':'Нарушений нет', '#fff0cf','#9e681d']
+    ['◷',stats.total?stats.late:'—','Опоздания',stats.total?(stats.late?'Требуют контроля':'Нарушений нет'):'Нет данных', '#fff0cf','#9e681d']
   ];
   const kpiEl=document.getElementById('examKpis');if(kpiEl)kpiEl.innerHTML=kpis.map(k=>`<article class="v7-kpi" style="--kpi-tint:${k[4]};--kpi-color:${k[5]}"><div class="v7-kpi-icon">${k[0]}</div><strong>${k[1]}</strong><span>${k[2]}</span><small>${k[3]}</small></article>`).join('');
   v7RenderGradeChart(stats);v7RenderScoreChart(rows);v7RenderAnalysis(rows,stats);v7RenderRisk(rows);v7RenderStudents(rows);v7RenderSchoolAnalysis(rows);v7RenderQuality();
@@ -142,25 +146,29 @@ function v7RenderExams(){
   ['examUploadButton','examLoadDemo'].forEach(id=>document.getElementById(id)?.classList.toggle('hidden',!canUpload));
 }
 function v7RenderGradeChart(stats){
-  const el=document.getElementById('examGradeChart');if(!el)return;const max=Math.max(1,...[5,4,3,2].map(g=>stats.grades[g]||0));
+  const el=document.getElementById('examGradeChart');if(!el)return;if(!stats.total){el.innerHTML='<div class="v7-empty-state">Оценки появятся после загрузки результатов</div>';return;}const max=Math.max(1,...[5,4,3,2].map(g=>stats.grades[g]||0));
   el.innerHTML=[5,4,3,2].map(g=>{const n=stats.grades[g]||0;return `<div class="v7-grade-bar"><strong>${n}</strong><div class="v7-grade-column" style="height:${Math.max(4,n/max*175)}px"></div><span>Оценка ${g}</span></div>`}).join('');
 }
 function v7RenderScoreChart(rows){
-  const el=document.getElementById('examScoreChart');if(!el)return;const ranges=[['Ниже 36',0,35],['36–50',36,50],['51–70',51,70],['71–80',71,80],['81–90',81,90],['91–100',91,100]];
+  const el=document.getElementById('examScoreChart');if(!el)return;if(!rows.length){el.innerHTML='<div class="v7-empty-state">Распределение баллов пока не рассчитано</div>';return;}const ranges=[['Ниже 36',0,35],['36–50',36,50],['51–70',51,70],['71–80',71,80],['81–90',81,90],['91–100',91,100]];
   const values=ranges.map(([label,min,max])=>({label,count:rows.filter(r=>Number.isFinite(Number(r.score))&&Number(r.score)>=min&&Number(r.score)<=max).length}));const peak=Math.max(1,...values.map(v=>v.count));
   el.innerHTML=values.map(v=>`<div class="v7-score-row"><span>${v.label}</span><div class="v7-score-track"><div class="v7-score-fill" style="width:${v.count/peak*100}%"></div></div><b>${v.count}</b></div>`).join('');
 }
 function v7SchoolStats(rows){
   const groups={};rows.forEach(r=>(groups[r.school]||(groups[r.school]=[])).push(r));
-  return Object.entries(groups).map(([school,list])=>({school,...v7ExamStats(list)})).sort((a,b)=>b.avg-a.avg);
+  return Object.entries(groups).map(([school,list])=>({school,...v7ExamStats(list)})).sort((a,b)=>(b.avg??-1)-(a.avg??-1));
 }
 function v7RenderAnalysis(rows,stats){
-  const el=document.getElementById('examAnalysisText');if(!el)return;const schools=v7SchoolStats(rows);const best=schools[0];const weakest=[...schools].sort((a,b)=>a.passRate-b.passRate)[0];const subjects={};rows.forEach(r=>(subjects[r.subject]||(subjects[r.subject]=[])).push(r));const subjectStats=Object.entries(subjects).map(([subject,list])=>({subject,...v7ExamStats(list)})).sort((a,b)=>b.avg-a.avg);
-  el.innerHTML=`<p>В выборку вошло <b>${stats.total}</b> результатов. Успешно сданы <b>${stats.passed}</b> (${stats.passRate.toFixed(1)}%), не сданы — <b>${stats.failed}</b>, неявок — <b>${stats.absent}</b>.</p><p>Средний балл составляет <b>${stats.avg.toFixed(1)}</b>, качество результатов (оценки 4 и 5) — <b>${stats.quality.toFixed(1)}%</b>.${best?` Лучший средний результат у <b>${v7Esc(best.school)}</b> — ${best.avg.toFixed(1)}.`:''}</p><p>${subjectStats[0]?`Наиболее высокий средний показатель по предмету «<b>${v7Esc(subjectStats[0].subject)}</b>» — ${subjectStats[0].avg.toFixed(1)}.`:''}${weakest&&weakest.failed?` Требует внимания ${v7Esc(weakest.school)}: не сдано ${weakest.failed} результатов.`:''} Зафиксировано опозданий: <b>${stats.late}</b>.</p>`;
+  const el=document.getElementById('examAnalysisText');if(!el)return;
+  if(!rows.length){el.innerHTML='<div class="v7-empty-state"><h3>Аналитика ещё не сформирована</h3><p>Загрузите результаты экзаменов. После проверки система автоматически рассчитает показатели и подготовит текстовую справку.</p></div>';return;}
+  const schools=v7SchoolStats(rows);const best=schools[0];const weakest=[...schools].sort((a,b)=>(a.passRate??101)-(b.passRate??101))[0];const subjects={};rows.forEach(r=>(subjects[r.subject]||(subjects[r.subject]=[])).push(r));const subjectStats=Object.entries(subjects).map(([subject,list])=>({subject,...v7ExamStats(list)})).sort((a,b)=>(b.avg??-1)-(a.avg??-1));
+  el.innerHTML=`<p>В выборку вошло <b>${stats.total}</b> результатов. Успешно сданы <b>${stats.passed}</b> (${stats.passRate===null?'—':stats.passRate.toFixed(1)+'%'}), не сданы — <b>${stats.failed}</b>, неявок — <b>${stats.absent}</b>.</p><p>Средний балл составляет <b>${stats.avg===null?'—':stats.avg.toFixed(1)}</b>, качество результатов (оценки 4 и 5) — <b>${stats.quality===null?'—':stats.quality.toFixed(1)+'%'}</b>.${best&&best.avg!==null?` Лучший средний результат у <b>${v7Esc(best.school)}</b> — ${best.avg.toFixed(1)}.`:''}</p><p>${subjectStats[0]&&subjectStats[0].avg!==null?`Наиболее высокий средний показатель по предмету «<b>${v7Esc(subjectStats[0].subject)}</b>» — ${subjectStats[0].avg.toFixed(1)}.`:''}${weakest&&weakest.failed?` Требует внимания ${v7Esc(weakest.school)}: не сдано ${weakest.failed} результатов.`:''} Зафиксировано опозданий: <b>${stats.late}</b>.</p>`;
 }
 function v7RenderRisk(rows){
-  const el=document.getElementById('examRiskList');if(!el)return;const schools=v7SchoolStats(rows);const failing=[...schools].sort((a,b)=>b.failed-a.failed)[0];const late=[...schools].sort((a,b)=>b.late-a.late)[0];const low=[...schools].sort((a,b)=>a.avg-b.avg)[0];
-  const items=[];if(failing&&failing.failed)items.push(['red','!',failing.school,`${failing.failed} несданных результатов (${(100-failing.passRate).toFixed(1)}%)`]);if(low)items.push(['','↘',low.school,`Самый низкий средний балл в выборке — ${low.avg.toFixed(1)}`]);if(late&&late.late)items.push(['','◷',late.school,`Опозданий учеников: ${late.late}`]);if(!items.length)items.push(['green','✓','Критических рисков не найдено','Все результаты соответствуют заданным правилам контроля']);
+  const el=document.getElementById('examRiskList');if(!el)return;
+  if(!rows.length){el.innerHTML='<div class="v7-empty-state"><span>◌</span><h3>Риски ещё не рассчитаны</h3><p>Для оценки рисков нужны реальные результаты экзаменов.</p></div>';return;}
+  const schools=v7SchoolStats(rows);const failing=[...schools].sort((a,b)=>b.failed-a.failed)[0];const late=[...schools].sort((a,b)=>b.late-a.late)[0];const low=[...schools].filter(x=>x.avg!==null).sort((a,b)=>a.avg-b.avg)[0];
+  const items=[];if(failing&&failing.failed)items.push(['red','!',failing.school,`${failing.failed} несданных результатов (${failing.passRate===null?'—':(100-failing.passRate).toFixed(1)+'%'})`]);if(low)items.push(['','↘',low.school,`Самый низкий средний балл в выборке — ${low.avg.toFixed(1)}`]);if(late&&late.late)items.push(['','◷',late.school,`Опозданий учеников: ${late.late}`]);if(!items.length)items.push(['green','✓','Критических рисков не найдено','По загруженным данным нарушения заданных правил не обнаружены']);
   el.innerHTML=items.map(i=>`<div class="v7-risk-item ${i[0]}"><i>${i[1]}</i><div><strong>${v7Esc(i[2])}</strong><span>${v7Esc(i[3])}</span></div></div>`).join('');
 }
 function v7RenderStudents(rows){
@@ -168,8 +176,8 @@ function v7RenderStudents(rows){
 }
 function v7RenderSchoolAnalysis(rows){
   const schools=v7SchoolStats(rows);const cards=document.getElementById('examSchoolCards');const body=document.getElementById('examSchoolsBody');
-  if(cards)cards.innerHTML=schools.slice(0,3).map((s,i)=>`<article class="v7-school-analysis-card"><span class="rank">${i+1} место</span><h3>${v7Esc(s.school)}</h3><div class="v7-school-analysis-stats"><div><strong>${s.avg.toFixed(1)}</strong><span>средний балл</span></div><div><strong>${s.passRate.toFixed(0)}%</strong><span>сдали</span></div><div><strong>${s.quality.toFixed(0)}%</strong><span>оценки 4–5</span></div></div></article>`).join('')||'<div class="v7-empty-state">Нет данных</div>';
-  if(body)body.innerHTML=schools.map((s,i)=>`<tr><td><b>${i+1}</b></td><td class="task-title-cell"><strong>${v7Esc(s.school)}</strong></td><td>${s.total}</td><td><b>${s.avg.toFixed(1)}</b></td><td><span class="tag green">${s.passed} · ${s.passRate.toFixed(0)}%</span></td><td><span class="tag ${s.failed?'red':'green'}">${s.failed}</span></td><td>${s.grades[5]+s.grades[4]} · ${s.quality.toFixed(0)}%</td><td>${s.late}</td></tr>`).join('');
+  if(cards)cards.innerHTML=schools.slice(0,3).map((s,i)=>`<article class="v7-school-analysis-card"><span class="rank">${i+1} место</span><h3>${v7Esc(s.school)}</h3><div class="v7-school-analysis-stats"><div><strong>${s.avg===null?'—':s.avg.toFixed(1)}</strong><span>средний балл</span></div><div><strong>${s.passRate===null?'—':s.passRate.toFixed(0)+'%'}</strong><span>сдали</span></div><div><strong>${s.quality===null?'—':s.quality.toFixed(0)+'%'}</strong><span>оценки 4–5</span></div></div></article>`).join('')||'<div class="v7-empty-state">Нет данных</div>';
+  if(body)body.innerHTML=schools.map((s,i)=>`<tr><td><b>${i+1}</b></td><td class="task-title-cell"><strong>${v7Esc(s.school)}</strong></td><td>${s.total}</td><td><b>${s.avg===null?'—':s.avg.toFixed(1)}</b></td><td><span class="tag green">${s.passed} · ${s.passRate===null?'—':s.passRate.toFixed(0)+'%'}</span></td><td><span class="tag ${s.failed?'red':'green'}">${s.failed}</span></td><td>${s.grades[5]+s.grades[4]} · ${s.quality===null?'—':s.quality.toFixed(0)+'%'}</td><td>${s.late}</td></tr>`).join('');
 }
 function v7ComputeQuality(){
   const issues=[...v7ExamIssues];const seen=new Set();let duplicates=0,missing=0,mismatch=0;

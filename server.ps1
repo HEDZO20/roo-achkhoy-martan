@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $port = 8080
 $prefix = "http://localhost:$port/"
@@ -19,7 +19,7 @@ try {
   exit 1
 }
 Start-Process $prefix
-Write-Host "ONLINE V23 запущен: $prefix" -ForegroundColor Green
+Write-Host "ONLINE V24 запущен: $prefix" -ForegroundColor Green
 Write-Host "Не закрывайте это окно во время работы сайта." -ForegroundColor Yellow
 while ($listener.IsListening) {
   try {

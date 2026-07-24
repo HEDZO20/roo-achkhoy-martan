@@ -89,7 +89,7 @@ function updateV5Header(){
   const eyebrow=document.getElementById('pageEyebrow');const title=document.getElementById('pageTitle');
   if(eyebrow)eyebrow.textContent='Отдел Образования';
   if(title)title.textContent='Ачхой-Мартановского Района';
-  const version=document.getElementById('versionButton');if(version)version.textContent='V23';
+  const version=document.getElementById('versionButton');if(version)version.textContent='V24';
 }
 
 const _v5RenderAll=renderAll;

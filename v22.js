@@ -2,7 +2,7 @@
 
 /* V22 — полный аудит достоверности данных, пустых состояний и читаемости интерфейса. */
 const V22 = {
-  version: 'V23',
+  version: 'V24',
   auditDate: '24.07.2026'
 };
 
@@ -294,7 +294,7 @@ function v22Bind(){
   const delegationTo=document.getElementById('delegationTo');if(delegationTo&&!delegationTo.value)delegationTo.value=isoAfter(14);
   document.getElementById('calendarPrev')?.addEventListener('click',()=>{v22CalendarDate=new Date(v22CalendarDate.getFullYear(),v22CalendarDate.getMonth()-1,1);state.selectedCalendarDay=1;renderCalendar();});
   document.getElementById('calendarNext')?.addEventListener('click',()=>{v22CalendarDate=new Date(v22CalendarDate.getFullYear(),v22CalendarDate.getMonth()+1,1);state.selectedCalendarDay=1;renderCalendar();});
-  const version=document.getElementById('versionButton');if(version)version.title='ONLINE V23 — рабочие роли и полный аудит интерфейса';
+  const version=document.getElementById('versionButton');if(version)version.title='ONLINE V24 — качество данных и история импортов';
   setTimeout(()=>{try{renderAll();}catch(e){console.warn('V22 initial render',e);}},0);
 }
 document.addEventListener('DOMContentLoaded',v22Bind);
