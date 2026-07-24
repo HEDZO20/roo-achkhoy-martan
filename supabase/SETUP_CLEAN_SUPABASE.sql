@@ -1,5 +1,5 @@
 -- ============================================================
--- Отдел Образования Ачхой-Мартановского Района — ONLINE V22 — ЧИСТАЯ УСТАНОВКА
+-- Отдел Образования Ачхой-Мартановского Района — ONLINE V23 — ЧИСТАЯ УСТАНОВКА
 -- Выполнить целиком в Supabase Dashboard -> SQL Editor -> New query
 -- Скрипт можно запускать повторно: он старается не дублировать данные.
 -- ============================================================
@@ -38,7 +38,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
   full_name text not null default 'Пользователь',
-  role text not null default 'pending' check (role in ('chief','deputy','department_head','specialist','school_director','school_staff','observer','pending')),
+  role text not null default 'pending' check (role in ('chief','deputy','department_head','specialist','school_director','school_staff','pending')),
   department_id text references public.departments(id) on delete set null,
   school_id text references public.schools(id) on delete set null,
   active boolean not null default true,
@@ -53,7 +53,7 @@ create table if not exists public.user_invitations (
   id uuid primary key default gen_random_uuid(),
   email text not null,
   full_name text,
-  role text not null check (role in ('chief','deputy','department_head','specialist','school_director','school_staff','observer')),
+  role text not null check (role in ('chief','deputy','department_head','specialist','school_director','school_staff')),
   department_id text references public.departments(id) on delete cascade,
   school_id text references public.schools(id) on delete cascade,
   invited_by uuid references public.profiles(id) on delete set null,
@@ -296,7 +296,7 @@ language sql
 stable
 security definer
 set search_path = public
-as $$ select public.current_role() in ('chief','deputy','observer') $$;
+as $$ select public.current_role() in ('chief','deputy') $$;
 
 create or replace function public.can_view_exam_data(target_school text)
 returns boolean
@@ -306,7 +306,7 @@ security definer
 set search_path = public
 as $$
   select case
-    when public.current_role() in ('chief','deputy','observer') then true
+    when public.current_role() in ('chief','deputy') then true
     when public.current_role() in ('department_head','specialist')
       then public.current_department_id() in ('methodical','information')
     when public.current_role() in ('school_director','school_staff')
@@ -483,7 +483,7 @@ create policy roo_schools_manage on public.schools for all to authenticated usin
 
 create policy roo_profiles_select on public.profiles for select to authenticated using (
   id=auth.uid()
-  or public.current_role() in ('chief','deputy','observer')
+  or public.current_role() in ('chief','deputy')
   or (public.current_role()='department_head' and department_id=public.current_department_id())
   or (public.current_role()='school_director' and school_id=public.current_school_id())
 );
@@ -495,7 +495,7 @@ create policy roo_invites_update on public.user_invitations for update to authen
 create policy roo_invites_delete on public.user_invitations for delete to authenticated using (public.current_role()='chief');
 
 create policy roo_tasks_select on public.tasks for select to authenticated using (
-  public.current_role() in ('chief','deputy','observer')
+  public.current_role() in ('chief','deputy')
   or (public.current_role() in ('department_head','specialist') and department_id=public.current_department_id())
   or exists(select 1 from public.task_recipients tr where tr.task_id=tasks.id and tr.school_id=public.current_school_id())
 );
@@ -515,7 +515,7 @@ create policy roo_tasks_update on public.tasks for update to authenticated using
 create policy roo_tasks_delete on public.tasks for delete to authenticated using (public.current_role()='chief');
 
 create policy roo_recipients_select on public.task_recipients for select to authenticated using (
-  public.current_role() in ('chief','deputy','observer')
+  public.current_role() in ('chief','deputy')
   or school_id=public.current_school_id()
   or exists(select 1 from public.tasks t where t.id=task_recipients.task_id and t.department_id=public.current_department_id() and public.current_role() in ('department_head','specialist'))
 );
@@ -528,7 +528,7 @@ create policy roo_recipients_manage on public.task_recipients for all to authent
 );
 
 create policy roo_submissions_select on public.submissions for select to authenticated using (
-  public.current_role() in ('chief','deputy','observer')
+  public.current_role() in ('chief','deputy')
   or school_id=public.current_school_id()
   or exists(select 1 from public.tasks t where t.id=submissions.task_id and t.department_id=public.current_department_id() and public.current_role() in ('department_head','specialist'))
 );
@@ -557,7 +557,7 @@ create policy roo_submissions_update_roo on public.submissions for update to aut
 
 create policy roo_versions_select on public.submission_versions for select to authenticated using (
   exists(select 1 from public.submissions s where s.id=submission_versions.submission_id and (
-    public.current_role() in ('chief','deputy','observer')
+    public.current_role() in ('chief','deputy')
     or s.school_id=public.current_school_id()
     or exists(select 1 from public.tasks t where t.id=s.task_id and t.department_id=public.current_department_id() and public.current_role() in ('department_head','specialist'))
   ))
@@ -571,7 +571,7 @@ create policy roo_versions_insert on public.submission_versions for insert to au
 );
 
 create policy roo_comments_select on public.task_comments for select to authenticated using (
-  public.current_role() in ('chief','deputy','observer')
+  public.current_role() in ('chief','deputy')
   or author_id=auth.uid()
   or school_id=public.current_school_id()
   or exists(select 1 from public.tasks t where t.id=task_comments.task_id and t.department_id=public.current_department_id() and public.current_role() in ('department_head','specialist'))
@@ -580,7 +580,7 @@ create policy roo_comments_insert on public.task_comments for insert to authenti
 
 create policy roo_files_select on public.files for select to authenticated using (
   uploader_id=auth.uid()
-  or public.current_role() in ('chief','deputy','observer')
+  or public.current_role() in ('chief','deputy')
   or school_id=public.current_school_id()
   or department_id=public.current_department_id()
 );
@@ -617,7 +617,7 @@ create policy roo_exam_results_delete on public.exam_results for delete to authe
 );
 
 create policy roo_audit_select on public.audit_log for select to authenticated using (
-  public.current_role() in ('chief','deputy','observer') or actor_id=auth.uid()
+  public.current_role() in ('chief','deputy') or actor_id=auth.uid()
 );
 create policy roo_audit_insert on public.audit_log for insert to authenticated with check (actor_id=auth.uid());
 
@@ -662,7 +662,7 @@ using (
     owner_id=auth.uid()::text
     or exists(select 1 from public.files f where f.path=storage.objects.name and (
       f.uploader_id=auth.uid()
-      or public.current_role() in ('chief','deputy','observer')
+      or public.current_role() in ('chief','deputy')
       or f.school_id=public.current_school_id()
       or f.department_id=public.current_department_id()
     ))
@@ -705,7 +705,7 @@ on conflict(email) do update set role=excluded.role,department_id=excluded.depar
 commit;
 
 -- После успешного выполнения:
--- 1) Откройте сайт ONLINE V22 — ЧИСТАЯ УСТАНОВКА.
+-- 1) Откройте сайт ONLINE V23 — ЧИСТАЯ УСТАНОВКА.
 -- 2) Нажмите «Первый вход / создать пароль» и зарегистрируйте СВОЮ почту первой.
 -- 3) Первый неизвестный аккаунт станет Начальником РОО.
 -- 4) После этого начальники отделов регистрируются по пяти заранее разрешённым почтам.

@@ -561,7 +561,7 @@
 
   function updateVersionText(){
     const version=$('versionButton');if(version)version.textContent='V11';
-    const banner=$('systemUpdateBanner');if(banner){const strong=banner.querySelector('strong'),small=banner.querySelector('small');if(strong)strong.textContent='Система обновлена до ONLINE V22';if(small)small.textContent='Проведён полный аудит показателей, интерфейса и сохранения дизайна.';}
+    const banner=$('systemUpdateBanner');if(banner){const strong=banner.querySelector('strong'),small=banner.querySelector('small');if(strong)strong.textContent='Система обновлена до ONLINE V23';if(small)small.textContent='Удалена лишняя роль, сохранены аудит показателей и настройки дизайна.';}
   }
 
   window.ROODesignEditor={

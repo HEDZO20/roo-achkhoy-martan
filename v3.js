@@ -64,9 +64,6 @@ function loadV3(){
 const v3State=loadV3();
 function saveV3(){ localSet(V3_KEY,JSON.stringify(v3State)); }
 
-ROLE_CONFIG.observer={label:'Наблюдатель руководства',scope:'Только просмотр ключевой аналитики района',pages:['dashboard','situation','schools','indicators','rating','departments','reports','documents','calendar'],permissions:['Просмотр ситуационного центра','Просмотр рейтинга и сводной аналитики','Доступ к опубликованным документам','Без права изменения данных'],canCreate:false,canPublish:false,canApprove:false,canManageSchools:false,canManageUsers:false,canEditRating:false,canViewAudit:false};
-if(!USERS.some(u=>u.id==='u11')) USERS.push({id:'u11',role:'observer',name:'Наблюдатель',initials:'Н',email:'',unit:'Руководство района',departmentId:'management',lastLogin:'',active:true});
-ROLE_USER_MAP.observer='u11';
 
 const V3_PAGES={
   chief:['dashboard','situation','tasks','approvals','schools','indicators','rating','departments','reports','automations','constructor','inspections','meetings','appeals','documents','personal','calendar','archive','users','audit'],
@@ -74,8 +71,7 @@ const V3_PAGES={
   department_head:['dashboard','situation','tasks','approvals','schools','indicators','rating','departments','reports','automations','constructor','inspections','meetings','appeals','documents','personal','calendar','archive','audit'],
   specialist:['dashboard','tasks','schools','indicators','rating','reports','automations','constructor','inspections','meetings','appeals','documents','personal','calendar','archive'],
   school_director:['dashboard','tasks','rating','indicators','inspections','meetings','appeals','documents','personal','calendar','archive'],
-  school_staff:['dashboard','tasks','inspections','meetings','appeals','documents','personal','calendar','archive'],
-  observer:ROLE_CONFIG.observer.pages
+  school_staff:['dashboard','tasks','inspections','meetings','appeals','documents','personal','calendar','archive']
 };
 Object.entries(V3_PAGES).forEach(([role,pages])=>{ if(ROLE_CONFIG[role]) ROLE_CONFIG[role].pages=pages; });
 
@@ -86,9 +82,6 @@ Object.assign(PAGE_META,{
 const MODULE_PAGE_MAP={indicators:['indicators'],automations:['automations'],inspections:['inspections'],meetings:['meetings'],appeals:['appeals'],documents:['documents'],personal:['personal']};
 function moduleForPage(page){ return Object.entries(MODULE_PAGE_MAP).find(([,pages])=>pages.includes(page))?.[0]||null; }
 function isV3PageEnabled(page){ const key=moduleForPage(page);return !key||v3State.modules[key]!==false; }
-
-const _getVisibleTasksV2=getVisibleTasks;
-getVisibleTasks=function(){ if(state.role==='observer') return state.tasks; return _getVisibleTasksV2(); };
 
 const _navigateV2=navigate;
 navigate=function(page,scroll=true){

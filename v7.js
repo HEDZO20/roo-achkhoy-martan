@@ -42,9 +42,9 @@ function v7SaveExamRows(){ localSet(V7_KEYS.exams,JSON.stringify(v7ExamRows)); }
 function v7SaveDeptOverrides(){ localSet(V7_KEYS.deptOverrides,JSON.stringify(v7DeptOverrides)); }
 
 function v7AddPage(role,page){ if(ROLE_CONFIG[role] && !ROLE_CONFIG[role].pages.includes(page)) ROLE_CONFIG[role].pages.splice(ROLE_CONFIG[role].pages.indexOf('rating')+1,0,page); }
-['chief','deputy','department_head','specialist','observer'].forEach(r=>v7AddPage(r,'exams'));
+['chief','deputy','department_head','specialist'].forEach(r=>v7AddPage(r,'exams'));
 v7AddPage('school_director','exams');
-['chief','deputy','department_head','observer'].forEach(r=>v7AddPage(r,'department_control'));
+['chief','deputy','department_head'].forEach(r=>v7AddPage(r,'department_control'));
 PAGE_META.exams=['ЕГЭ · ОГЭ · ГИА','Анализ экзаменов'];
 PAGE_META.department_control=['Внутренний контроль РОО','Работа отделов'];
 ROLE_CONFIG.department_head.scope='Только назначенный отдел РОО';

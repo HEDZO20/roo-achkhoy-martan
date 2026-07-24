@@ -1,6 +1,6 @@
 'use strict';
 
-/* ONLINE V22 — подключение интерфейса к Supabase. */
+/* ONLINE V23 — подключение интерфейса к Supabase. */
 (() => {
   const cfg = window.ROO_SUPABASE_CONFIG;
   if (!cfg || !window.supabase?.createClient) {
@@ -33,7 +33,7 @@
   const ROLE_LABELS = {
     chief:'Начальник РОО', deputy:'Заместитель начальника РОО', department_head:'Начальник отдела',
     specialist:'Специалист отдела', school_director:'Директор школы', school_staff:'Ответственный сотрудник школы',
-    observer:'Наблюдатель руководства', pending:'Ожидает активации'
+    pending:'Ожидает активации'
   };
 
   const statusText = {
@@ -138,17 +138,17 @@
     const stateBox=document.createElement('div');
     stateBox.id='rooOnlineState'; stateBox.className='roo-online-state'; stateBox.textContent='Проверка подключения к Supabase…';
     form.appendChild(stateBox);
-    document.querySelector('.login-card-head span:last-child').textContent='ONLINE V22 · рабочая онлайн-система';
+    document.querySelector('.login-card-head span:last-child').textContent='ONLINE V23 · рабочая онлайн-система';
   }
 
   function updateVersionUI(){
     hideLegacyDemoControls();
-    const version=document.getElementById('versionButton'); if(version)version.textContent='V22';
-    const head=document.querySelector('.login-card-head span:last-child'); if(head)head.textContent='ONLINE V22 · Supabase подключён';
+    const version=document.getElementById('versionButton'); if(version)version.textContent='V23';
+    const head=document.querySelector('.login-card-head span:last-child'); if(head)head.textContent='ONLINE V23 · Supabase подключён';
     const banner=document.getElementById('systemUpdateBanner');
     if(banner){
       const strong=banner.querySelector('strong'); const small=banner.querySelector('small');
-      if(strong)strong.textContent='Онлайн-система V22';
+      if(strong)strong.textContent='Онлайн-система V23';
       if(small)small.textContent='Данные хранятся в Supabase и доступны пользователям с разных устройств.';
     }
     const top=document.querySelector('.v5-header-brand');

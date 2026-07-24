@@ -8,8 +8,7 @@ const V5_ROLE_TEXT={
   department_head:'Здесь находятся поручения вашего отдела, ответы школ на проверке и ближайшие сроки.',
   specialist:'Здесь вы можете выполнять свои задачи, проверять ответы школ и готовить сводные отчёты.',
   school_director:'Здесь находятся все поручения вашей школы, отчёты сотрудников и подтверждение отправки в РОО.',
-  school_staff:'Здесь находятся назначенные вам поручения. Откройте задание, заполните форму и отправьте директору.',
-  observer:'Здесь доступна ключевая аналитика района в режиме просмотра.'
+  school_staff:'Здесь находятся назначенные вам поручения. Откройте задание, заполните форму и отправьте директору.'
 };
 
 function v5Esc(value){ return typeof escapeHTML==='function'?escapeHTML(String(value??'')):String(value??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
@@ -90,7 +89,7 @@ function updateV5Header(){
   const eyebrow=document.getElementById('pageEyebrow');const title=document.getElementById('pageTitle');
   if(eyebrow)eyebrow.textContent='Отдел Образования';
   if(title)title.textContent='Ачхой-Мартановского Района';
-  const version=document.getElementById('versionButton');if(version)version.textContent='V22';
+  const version=document.getElementById('versionButton');if(version)version.textContent='V23';
 }
 
 const _v5RenderAll=renderAll;
