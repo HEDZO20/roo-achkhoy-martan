@@ -1,6 +1,6 @@
 'use strict';
 
-/* ONLINE V10 — подключение статического интерфейса к Supabase. */
+/* ONLINE V22 — подключение интерфейса к Supabase. */
 (() => {
   const cfg = window.ROO_SUPABASE_CONFIG;
   if (!cfg || !window.supabase?.createClient) {
@@ -138,17 +138,17 @@
     const stateBox=document.createElement('div');
     stateBox.id='rooOnlineState'; stateBox.className='roo-online-state'; stateBox.textContent='Проверка подключения к Supabase…';
     form.appendChild(stateBox);
-    document.querySelector('.login-card-head span:last-child').textContent='ONLINE V21 · рабочая онлайн-система';
+    document.querySelector('.login-card-head span:last-child').textContent='ONLINE V22 · рабочая онлайн-система';
   }
 
   function updateVersionUI(){
     hideLegacyDemoControls();
-    const version=document.getElementById('versionButton'); if(version)version.textContent='V21';
-    const head=document.querySelector('.login-card-head span:last-child'); if(head)head.textContent='ONLINE V21 · Supabase подключён';
+    const version=document.getElementById('versionButton'); if(version)version.textContent='V22';
+    const head=document.querySelector('.login-card-head span:last-child'); if(head)head.textContent='ONLINE V22 · Supabase подключён';
     const banner=document.getElementById('systemUpdateBanner');
     if(banner){
       const strong=banner.querySelector('strong'); const small=banner.querySelector('small');
-      if(strong)strong.textContent='Онлайн-система V21';
+      if(strong)strong.textContent='Онлайн-система V22';
       if(small)small.textContent='Данные хранятся в Supabase и доступны пользователям с разных устройств.';
     }
     const top=document.querySelector('.v5-header-brand');
@@ -196,19 +196,67 @@
   function mapDepartment(row){
     return {
       id:row.id,name:row.name,short:row.short_name||row.name.replace(/^Отдел\s+/i,''),icon:(row.short_name||row.name).slice(0,1).toUpperCase(),
-      head:row.head_name||'Начальник отдела не указан',email:row.email||'',staff:0,active:0,overdue:0,completion:100
+      head:row.head_name||'Начальник отдела не указан',email:row.email||'',staff:0,active:0,overdue:0,completion:null
     };
+  }
+
+  function finiteOrNull(value){
+    if(value===null||value===undefined||value==='')return null;
+    const n=Number(value);return Number.isFinite(n)?n:null;
   }
 
   function mapSchool(row,index){
     const m=safeJSON(row.metadata,{});
+    const storedRating=finiteOrNull(row.rating);
     return {
       id:row.id,name:row.name,locality:row.locality||'',director:row.director_name||'Не указан',responsible:row.responsible_name||'Не указан',
-      rating:Number(row.rating||100),june:Number(m.june||row.rating||100),year:Number(m.year||row.rating||100),place:index+1,
-      tasks:Number(m.tasks||0),onTime:Number(m.onTime||0),overdue:Number(m.overdue||0),returned:Number(m.returned||0),
-      quality:Number(m.quality||100),completeness:Number(m.completeness||100),response:Number(m.response||100),trend:Number(m.trend||0),
-      risk:Number(row.rating||100)>=90?'good':Number(row.rating||100)>=75?'attention':'critical',online:true,email:row.email||''
+      rating:storedRating,june:finiteOrNull(m.june),year:finiteOrNull(m.year),place:null,
+      tasks:0,onTime:0,overdue:0,returned:0,
+      quality:finiteOrNull(m.quality),completeness:finiteOrNull(m.completeness),response:finiteOrNull(m.response),trend:finiteOrNull(m.trend),
+      risk:storedRating===null?'unknown':storedRating>=90?'good':storedRating>=75?'attention':'critical',online:false,email:row.email||'',metadata:m
     };
+  }
+
+  function deriveSchoolPerformance(taskRows,submissionRows){
+    const taskById=new Map((taskRows||[]).map(t=>[Number(t.id),t]));
+    const submissionByKey=new Map((submissionRows||[]).map(s=>[`${Number(s.task_id)}:${s.school_id}`,s]));
+    const now=Date.now();
+    SCHOOLS.forEach(school=>{
+      const recipients=[];
+      (taskRows||[]).forEach(task=>(task.task_recipients||[]).forEach(rec=>{if(rec.school_id===school.id)recipients.push({task,rec,submission:submissionByKey.get(`${Number(task.id)}:${school.id}`)});}));
+      school.tasks=recipients.length;
+      school.overdue=recipients.filter(x=>x.rec.status==='overdue'||(Date.parse(x.task.deadline)<now&&!['accepted'].includes(x.rec.status))).length;
+      school.returned=recipients.filter(x=>x.rec.status==='returned'||x.submission?.status==='returned').length;
+      school.onTime=recipients.filter(x=>{
+        if(x.rec.status!=='accepted')return false;
+        const completed=Date.parse(x.rec.completed_at||x.rec.accepted_at||x.rec.updated_at||'');
+        const deadline=Date.parse(x.task.deadline||'');
+        return Number.isFinite(completed)&&Number.isFinite(deadline)&&completed<=deadline;
+      }).length;
+      const closed=recipients.filter(x=>['accepted','overdue'].includes(x.rec.status));
+      const deadlineScore=closed.length?school.onTime/closed.length*100:null;
+      const reviewed=recipients.filter(x=>['accepted','returned'].includes(x.submission?.status||x.rec.status));
+      school.quality=reviewed.length?reviewed.filter(x=>(x.submission?.status||x.rec.status)==='accepted').length/reviewed.length*100:null;
+      const submitted=recipients.filter(x=>x.submission&&['director','review','returned','accepted'].includes(x.submission.status));
+      school.completeness=submitted.length?submitted.filter(x=>{
+        const answers=safeJSON(x.submission.answers,{});const files=safeJSON(x.submission.field_files,{});
+        return Object.keys(answers).length>0||Object.keys(files).length>0;
+      }).length/submitted.length*100:null;
+      const opened=recipients.filter(x=>x.rec.opened_at);
+      school.response=opened.length?opened.filter(x=>{
+        const openedAt=Date.parse(x.rec.opened_at);const createdAt=Date.parse(x.task.created_at||'');
+        return Number.isFinite(openedAt)&&Number.isFinite(createdAt)&&(openedAt-createdAt)<=24*3600*1000;
+      }).length/opened.length*100:null;
+      const components=[[deadlineScore,40],[school.quality,30],[school.completeness,20],[school.response,10]].filter(([v])=>Number.isFinite(v));
+      if(components.length){
+        const weight=components.reduce((a,[,w])=>a+w,0);
+        school.rating=Math.round(components.reduce((a,[v,w])=>a+v*w,0)/weight*10)/10;
+      }else if(school.tasks===0){school.rating=null;}
+      school.risk=school.rating===null?'unknown':school.rating>=90?'good':school.rating>=75?'attention':'critical';
+      school.online=false;
+    });
+    const rated=SCHOOLS.filter(s=>Number.isFinite(s.rating)).sort((a,b)=>b.rating-a.rating);
+    rated.forEach((s,i)=>s.place=i+1);
   }
 
   function mapProfileUser(row){
@@ -232,7 +280,7 @@
       id:Number(row.id),title:row.title,departmentId:row.department_id,direction:row.direction||'',deadlineDate:row.deadline,
       deadline:formatDeadline(row.deadline),progress,completed:accepted,total,received:opened,opened,overdue,returned,
       status:row.status,statusText:statusText[row.status]||row.status,priority:row.priority||'Обычное',creator:row.creator_name||'Пользователь',
-      recipients:row.recipients_mode||'all',responseType:row.response_type||'Форма + файлы',directorApproval:row.requires_director!==false,
+      recipients:row.recipients_mode||'all',_recipients:recipients,responseType:row.response_type||'Форма + файлы',directorApproval:row.requires_director!==false,
       approvalRoute:row.approval_route||'Автоматически',weight:Number(row.weight||1),description:row.description||'',formFields:fields,
       repeatRule:row.repeat_rule||'Не повторять',_remote:true,_creatorId:row.creator_id||null
     };
@@ -300,6 +348,7 @@
       syncedAuditFingerprints.add(auditFingerprint(item)); return item;
     });
     v4State.submissions=(submissionsRes.data||[]).map(row=>mapSubmission(row,filesRes.data||[],versionsRes.data||[]));
+    deriveSchoolPerformance(tasksRes.data||[],submissionsRes.data||[]);
     const schoolMap=new Map(SCHOOLS.map(s=>[s.id,s.name]));
     v7ExamRows=(examsRes.data||[]).map(row=>mapExam(row,schoolMap));
     v7ExamIssues=[];
@@ -308,9 +357,14 @@
       const performance=new Map(perfRes.data.map(x=>[x.id,x]));
       V7_DEPARTMENT_PROFILES.splice(0,V7_DEPARTMENT_PROFILES.length,...DEPARTMENTS.filter(d=>d.id!=='management').map(d=>{
         const p=performance.get(d.id)||{};
-        return {id:d.id,code:(d.short||d.name).slice(0,2).toUpperCase(),name:d.name,email:d.email||'',head:d.head||'Начальник отдела не указан',
-          lastLogin:'Данные из журнала',online:true,tasksGiven:Number(p.tasks_given||0),completed:Number(p.completed||0),waitingReview:Number(p.waiting_review||0),
-          overdue:Number(p.overdue||0),avgReview:0,responses:Number(p.responses||0),rating:Number(p.rating||100),sourceDirection:d.short||d.name};
+        const headProfile=(profilesRes.data||[]).find(x=>x.department_id===d.id&&x.role==='department_head');
+        const seen=headProfile?.last_seen_at?Date.parse(headProfile.last_seen_at):0;
+        const isOnline=seen>0&&(Date.now()-seen)<15*60*1000;
+        const tasksGiven=Number(p.tasks_given||0),responses=Number(p.responses||0);
+        const rating=finiteOrNull(p.rating);
+        return {id:d.id,code:(d.short||d.name).slice(0,2).toUpperCase(),name:d.name,email:d.email||'',head:d.head||headProfile?.full_name||'Начальник отдела не указан',
+          lastLogin:headProfile?.last_seen_at?formatDateTime(headProfile.last_seen_at):'Не входил',online:isOnline,tasksGiven,completed:Number(p.completed||0),waitingReview:Number(p.waiting_review||0),
+          overdue:Number(p.overdue||0),avgReview:finiteOrNull(p.avg_review_hours),responses,rating:(tasksGiven||responses)?rating:null,sourceDirection:d.short||d.name};
       }));
     }
 
@@ -551,7 +605,7 @@
   async function syncExamRows(){
     if(!onlineReady||!['chief','deputy','department_head','specialist'].includes(currentProfile?.role))return;
     const rows=v7ExamRows.filter(r=>r.source!=='Демо-набор').map(r=>({
-      source_row_id:String(r.id||crypto.randomUUID()),academic_year:r.year||'2025/2026',exam_type:r.exam,period:'Основной',school_id:examSchoolId(r),
+      source_row_id:String(r.id||crypto.randomUUID()),academic_year:r.year||defaultAcademicYear(),exam_type:r.exam,period:'Основной',school_id:examSchoolId(r),
       student_name:r.name,class_name:r.className||'',subject:r.subject,score:r.score===''?null:Number(r.score),grade:r.grade===''?null:Number(r.grade),
       result_status:r.status||'Сдал',late_minutes:Number(r.lateMinutes||0),passed:v7StatusKey(r)==='passed',metadata:{source:r.source||''}
     })).filter(r=>r.school_id&&r.student_name&&r.subject);
@@ -686,7 +740,7 @@
     const existing=new Map(SCHOOLS.map(s=>[normalizeSchoolName(s.name),s]));
     if(prepared.unknown.length){
       if(!['chief','deputy'].includes(currentProfile?.role)||!document.getElementById('rooCreateUnknownSchools')?.checked)throw new Error('Сначала добавьте неизвестные школы в справочник.');
-      const inserts=prepared.unknown.map(name=>({id:slugId(name),name,locality:'',director_name:'',responsible_name:'',rating:100,metadata:{created_from_exam_import:true}}));
+      const inserts=prepared.unknown.map(name=>({id:slugId(name),name,locality:'',director_name:'',responsible_name:'',rating:null,metadata:{created_from_exam_import:true}}));
       const {error}=await client.from('schools').upsert(inserts,{onConflict:'id'});if(error)throw error;
       inserts.forEach(s=>existing.set(normalizeSchoolName(s.name),{id:s.id,name:s.name}));
     }
@@ -781,7 +835,7 @@
     const director=prompt('Ф.И.О. директора:','')||'';
     const responsible=prompt('Ф.И.О. ответственного:','')||'';
     const email=prompt('Рабочая почта школы:','')||'';
-    const {error}=await client.from('schools').insert({id:slugId(name),name,locality,director_name:director,responsible_name:responsible,email,rating:100,metadata:{}});
+    const {error}=await client.from('schools').insert({id:slugId(name),name,locality,director_name:director,responsible_name:responsible,email,rating:null,metadata:{}});
     if(error)return onlineError(error,'Не удалось добавить школу');
     await insertAudit('Добавил школу','school',slugId(name),{object:name});await loadRemoteData({silent:true});navigate('schools');showToast('Школа добавлена');
   }

@@ -19,7 +19,7 @@ try {
   exit 1
 }
 Start-Process $prefix
-Write-Host "ONLINE V9 запущен: $prefix" -ForegroundColor Green
+Write-Host "ONLINE V22 запущен: $prefix" -ForegroundColor Green
 Write-Host "Не закрывайте это окно во время работы сайта." -ForegroundColor Yellow
 while ($listener.IsListening) {
   try {

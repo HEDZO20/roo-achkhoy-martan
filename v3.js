@@ -1,7 +1,7 @@
 'use strict';
 
 /*
-  V3 расширяет офлайн-демо. Все настройки сохраняются в localStorage браузера.
+  Дополнительные модули интерфейса. Настройки локальных модулей сохраняются в браузере.
   В рабочей онлайн-версии те же сущности будут храниться в Supabase/PostgreSQL.
 */
 
@@ -65,7 +65,7 @@ const v3State=loadV3();
 function saveV3(){ localSet(V3_KEY,JSON.stringify(v3State)); }
 
 ROLE_CONFIG.observer={label:'Наблюдатель руководства',scope:'Только просмотр ключевой аналитики района',pages:['dashboard','situation','schools','indicators','rating','departments','reports','documents','calendar'],permissions:['Просмотр ситуационного центра','Просмотр рейтинга и сводной аналитики','Доступ к опубликованным документам','Без права изменения данных'],canCreate:false,canPublish:false,canApprove:false,canManageSchools:false,canManageUsers:false,canEditRating:false,canViewAudit:false};
-if(!USERS.some(u=>u.id==='u11')) USERS.push({id:'u11',role:'observer',name:'Иса А. Дадаев',initials:'ИД',email:'observer@achkhoy-edu.ru',unit:'Руководство района',departmentId:'management',lastLogin:'Сегодня, 16:00',active:true});
+if(!USERS.some(u=>u.id==='u11')) USERS.push({id:'u11',role:'observer',name:'Наблюдатель',initials:'Н',email:'',unit:'Руководство района',departmentId:'management',lastLogin:'',active:true});
 ROLE_USER_MAP.observer='u11';
 
 const V3_PAGES={
@@ -124,65 +124,46 @@ function renderV3(){
 }
 
 function kpi(title,value,detail,progress=70,tone='blue'){
-  return `<article class="mini-kpi"><div class="kpi-top"><span>${escapeHTML(title)}</span><b class="tag ${tone}">${tone==='red'?'Риск':'LIVE'}</b></div><strong>${escapeHTML(value)}</strong><small>${escapeHTML(detail)}</small><div class="spark"><i style="width:${Math.max(2,Math.min(100,progress))}%"></i></div></article>`;
+  return `<article class="mini-kpi"><div class="kpi-top"><span>${escapeHTML(title)}</span><b class="tag ${tone}">${tone==='red'?'Риск':'LIVE'}</b></div><strong>${escapeHTML(value)}</strong><small>${escapeHTML(detail)}</small><div class="spark"><i style="width:${Math.max(0,Math.min(100,Number(progress)||0))}%"></i></div></article>`;
 }
 
 function renderSituationCenter(){
   const stats=document.getElementById('situationStats');if(!stats)return;
-  const visible=getVisibleTasks();
-  stats.innerHTML=[kpi('Исполнено вовремя','88,4%','+4,2% за неделю',88,'green'),kpi('Критические просрочки','5','Требуют решения руководства',26,'red'),kpi('Ожидают проверки','37','Среднее время проверки 2 ч 18 мин',64,'orange'),kpi('Школы без нарушений','19 из 34','56% организаций района',56,'blue')].join('');
-  const risks=[
-    ['!','СОШ с. Шаами-Юрт','Просрочено критическое поручение по безопасности','Открыть'],['!','Отдел воспитания','3 отчёта не проверены более 24 часов','Разобраться'],['◈','СОШ с. Новый Шарой','Повторный возврат отчёта по ГИА','Назначить контроль'],['□','Анкета готовности','Ожидает утверждения начальника РОО','Согласовать'],['↗','СОШ с. Хамби-Ирзи','Рейтинг снизился на 6,4 пункта','Посмотреть причины']
-  ];
-  document.getElementById('situationRisks').innerHTML=risks.map((r,i)=>`<div class="risk-item"><div class="risk-icon">${r[0]}</div><div><strong>${r[1]}</strong><span>${r[2]}</span></div><button class="text-button" data-v3-action="risk" data-risk="${i}">${r[3]}</button></div>`).join('');
-  document.getElementById('situationDepartments').innerHTML=DEPARTMENTS.filter(d=>d.id!=='management').map(d=>`<div class="department-score"><div><strong>${escapeHTML(d.short)}</strong><div class="score-line"><i style="width:${d.completion}%"></i></div><span class="muted">${d.active} активных · ${d.overdue} просрочено</span></div><b>${d.completion}%</b></div>`).join('');
-  const values=[76,82,79,85,88,90,87,92,91,89,94,90,93,96];
-  document.getElementById('situationTrend').innerHTML=values.map((v,i)=>`<div class="trend-day"><div class="trend-bars"><i style="height:${v}%"></i><i style="height:${Math.max(5,100-v)}%"></i></div><span>${8+i} июл</span></div>`).join('');
+  const tasks=typeof getVisibleTasks==='function'?getVisibleTasks():[];
+  const completed=tasks.filter(t=>['done','accepted'].includes(t.status)).length;
+  const overdue=tasks.filter(t=>t.status==='overdue').length;
+  const review=tasks.filter(t=>['review','roo_review','pending_approval'].includes(t.status)).length;
+  const closed=completed+overdue;
+  const onTime=closed?Math.round(completed/closed*100):null;
+  stats.innerHTML=[
+    kpi('Исполнено вовремя',onTime===null?'—':onTime+'%',closed?'По закрытым поручениям':'Недостаточно данных',onTime||0,'green'),
+    kpi('Просрочено',String(overdue),overdue?'Требуют контроля':'Просрочек нет',Math.min(100,overdue*10),'red'),
+    kpi('Ожидают проверки',String(review),review?'Нужна проверка ответов':'Очередь пуста',Math.min(100,review*10),'orange'),
+    kpi('Школы с рейтингом',String((typeof SCHOOLS!=='undefined'?SCHOOLS:[]).filter(s=>Number.isFinite(Number(s.rating))).length),'Только по рассчитанным данным',0,'blue')
+  ].join('');
+  const risks=document.getElementById('situationRisks');if(risks)risks.innerHTML='<div class="empty-state">Риски появятся после поступления реальных данных.</div>';
+  const deps=document.getElementById('situationDepartments');if(deps)deps.innerHTML='<div class="empty-state">Показатели отделов рассчитываются после начала работы.</div>';
+  const trend=document.getElementById('situationTrend');if(trend)trend.innerHTML='<div class="empty-state">Динамика появится после накопления данных.</div>';
   const clock=document.getElementById('situationClock');if(clock){const now=new Date();clock.textContent=now.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}
 }
 
 function indicatorData(school){
-  const factor=Math.max(0.65,1-(school.place-1)*.025);
-  return {
-    students:Math.round(842*factor),classes:Math.round(34*factor),teachers:Math.round(61*factor),vacancies:Math.max(0,Math.round((school.place-1)/3)),gia:Math.round((72.4-(school.place-1)*.65)*10)/10,vpr:Math.round((68.1-(school.place-1)*.55)*10)/10,attendance:Math.round((96.8-(school.place-1)*.23)*10)/10,food:Math.round(462*factor),transport:school.place%4===0?'Требуется ремонт':'Исправен',safety:school.risk==='critical'?'Требует внимания':'Соответствует'
-  };
+  const source=school?.indicators||{};
+  return {students:source.students??null,classes:source.classes??null,teachers:source.teachers??null,vacancies:source.vacancies??null,gia:source.gia??null,vpr:source.vpr??null,attendance:source.attendance??null,food:source.food??null,transport:source.transport??null,safety:source.safety??null};
 }
 function renderIndicators(){
   const select=document.getElementById('indicatorSchoolSelect');if(!select)return;
-  const schools=getVisibleSchools();
-  if(!schools.some(s=>s.id===v3State.indicatorSchool)) v3State.indicatorSchool=schools[0]?.id||'s1';
-  select.innerHTML=schools.map(s=>`<option value="${s.id}" ${s.id===v3State.indicatorSchool?'selected':''}>${escapeHTML(s.name)}</option>`).join('');
-  const school=schools.find(s=>s.id===v3State.indicatorSchool)||schools[0];if(!school)return;
-  const d=indicatorData(school);
-  document.getElementById('indicatorSummary').innerHTML=[
-    `<article class="metric-card" style="--metric-color:rgba(88,166,255,.18)"><span>Обучающиеся</span><strong>${d.students}</strong><small>+${Math.max(1,school.place%7)} с прошлого года</small></article>`,
-    `<article class="metric-card" style="--metric-color:rgba(75,214,165,.18)"><span>Педагоги</span><strong>${d.teachers}</strong><small>${d.vacancies} открытых вакансий</small></article>`,
-    `<article class="metric-card" style="--metric-color:rgba(166,133,255,.18)"><span>Средний балл ГИА</span><strong>${d.gia}</strong><small>${d.gia>68?'выше':'ниже'} среднего района</small></article>`,
-    `<article class="metric-card" style="--metric-color:rgba(255,180,93,.18)"><span>Посещаемость</span><strong>${d.attendance}%</strong><small>за последний отчётный месяц</small></article>`
-  ].join('');
-  const trends=[['Численность',82,d.students],['Средний балл ГИА',d.gia,72.4],['Посещаемость',d.attendance,96.8],['Кадровая обеспеченность',Math.max(65,98-d.vacancies*7),95]];
-  document.getElementById('indicatorTrend').innerHTML=trends.map(t=>`<div class="metric-row"><span>${t[0]}</span><div class="metric-bar"><i style="width:${Math.min(100,Number(t[1]))}%"></i></div><b>${t[1]}${t[0].includes('Посещ')||t[0].includes('обеспеч')?'%':''}</b></div>`).join('');
-  document.getElementById('indicatorAnomalies').innerHTML=`
-    <div class="anomaly-item orange"><div class="anomaly-icon">!</div><div><strong>Число учащихся изменилось на 17%</strong><span>Система просит подтвердить изменение по сравнению с прошлым периодом.</span></div><button class="text-button" data-v3-action="anomaly">Проверить</button></div>
-    <div class="anomaly-item blue"><div class="anomaly-icon">Σ</div><div><strong>Сумма по классам не совпадает</strong><span>В форме посещаемости расхождение составляет 3 учащихся.</span></div><button class="text-button" data-v3-action="anomaly">Открыть</button></div>
-    <div class="anomaly-item"><div class="anomaly-icon">↘</div><div><strong>Снижение результата ВПР</strong><span>Показатель ниже прошлого года на 8,2 пункта.</span></div><button class="text-button" data-v3-action="anomaly">Анализ</button></div>`;
-  const q=(document.getElementById('indicatorSearch')?.value||'').toLowerCase();
-  const groups=[
-    ['Контингент',[['Обучающиеся',d.students],['Классы',d.classes],['Льготные категории',Math.round(d.students*.18)],['Подвоз',school.place%3===0?'Организован':'Не требуется']]],
-    ['Кадры',[['Педагоги',d.teachers],['Вакансии',d.vacancies],['Молодые специалисты',Math.max(2,8-school.place%5)],['Средний стаж','12,6 года']]],
-    ['Качество образования',[['ГИА',d.gia],['ВПР',d.vpr],['Олимпиадники',Math.max(3,18-school.place)],['Неуспевающие',Math.max(0,school.place-3)]]],
-    ['Условия',[['Горячее питание',d.food],['Транспорт',d.transport],['Безопасность',d.safety],['Доступная среда',school.place%5===0?'Частично':'Да']]],
-    ['Исполнительская дисциплина',[['Рейтинг',school.rating+'%'],['Место',school.place],['Просрочено',school.overdue],['Возвраты',school.returned]]],
-    ['Дополнительно',[['Кружки',Math.max(8,22-school.place)],['Спортивные секции',Math.max(4,12-school.place%6)],['Музей','Да'],['Школьный театр',school.place%2?'Да':'Нет'],...v3State.customIndicators.map(x=>[x.name,x.value])]]
-  ].filter(g=>!q||g[0].toLowerCase().includes(q)||g[1].some(x=>String(x[0]).toLowerCase().includes(q)));
-  document.getElementById('indicatorTable').innerHTML=groups.map(g=>`<div class="indicator-group"><h4>${g[0]}</h4>${g[1].map(x=>`<div class="indicator-line"><span>${escapeHTML(x[0])}</span><b>${escapeHTML(x[1])}</b></div>`).join('')}</div>`).join('');
+  const schools=typeof getVisibleSchools==='function'?getVisibleSchools():[];
+  if(!schools.some(s=>s.id===v3State.indicatorSchool))v3State.indicatorSchool=schools[0]?.id||'';
+  select.innerHTML=schools.length?schools.map(s=>`<option value="${s.id}" ${s.id===v3State.indicatorSchool?'selected':''}>${escapeHTML(s.name)}</option>`).join(''):'<option value="">Школы не добавлены</option>';
+  ['indicatorSummary','indicatorTrend','indicatorAnomalies','indicatorTable'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<div class="empty-state">Показатели не загружены. Добавьте подтверждённые сведения школы.</div>';});
 }
-
 function renderAutomations(){
   const list=document.getElementById('automationList');if(!list)return;
-  const active=v3State.automations.filter(a=>a.active).length;
-  document.getElementById('automationSummary').innerHTML=[kpi('Активные правила',active,'Из '+v3State.automations.length+' созданных',active/v3State.automations.length*100,'green'),kpi('Срабатываний за месяц',v3State.automations.reduce((a,b)=>a+b.runs,0),'Сэкономлено около 17 часов',84,'blue'),kpi('Автоматических напоминаний','60','Доставлено 98,4%',98,'purple'),kpi('Эскалаций руководству','11','5 вопросов уже решены',50,'orange')].join('');
-  list.innerHTML=v3State.automations.map(a=>`<article class="automation-card"><div class="automation-card-head"><div><h3>${escapeHTML(a.name)}</h3><p>${a.active?'Правило работает':'Правило временно отключено'}</p></div><label class="switch"><input type="checkbox" data-v3-change="automation" data-id="${a.id}" ${a.active?'checked':''}/><span></span></label></div><div class="automation-flow"><div class="automation-node"><b>ЕСЛИ</b><br>${escapeHTML(a.trigger)}</div><span>→</span><div class="automation-node"><b>ТО</b><br>${escapeHTML(a.action)}</div></div><div class="automation-meta"><span>Срабатываний: ${a.runs}</span><span>Последнее: ${a.last}</span></div><button class="secondary-button" data-v3-action="run-automation" data-id="${a.id}">Запустить проверку сейчас</button></article>`).join('');
+  const items=Array.isArray(v3State.automations)?v3State.automations:[];
+  const active=items.filter(a=>a.active).length,runs=items.reduce((a,b)=>a+Number(b.runs||0),0);
+  document.getElementById('automationSummary').innerHTML=[kpi('Создано правил',String(items.length),'Все правила текущего браузера',items.length?'100':0,'blue'),kpi('Активные правила',String(active),'Включены пользователем',items.length?active/items.length*100:0,'green'),kpi('Срабатывания',String(runs),'Зафиксированные запуски',runs?100:0,'purple'),kpi('Облачная синхронизация','—','Модуль ещё не перенесён в Supabase',0,'orange')].join('');
+  list.innerHTML=items.length?items.map(a=>`<article class="automation-card"><div class="automation-card-head"><div><h3>${escapeHTML(a.name)}</h3><p>${a.active?'Правило включено':'Правило отключено'}</p></div><label class="switch"><input type="checkbox" data-v3-change="automation" data-id="${a.id}" ${a.active?'checked':''}/><span></span></label></div><div class="automation-flow"><div class="automation-node"><b>ЕСЛИ</b><br>${escapeHTML(a.trigger)}</div><span>→</span><div class="automation-node"><b>ТО</b><br>${escapeHTML(a.action)}</div></div><div class="automation-meta"><span>Срабатываний: ${Number(a.runs||0)}</span><span>Последнее: ${escapeHTML(a.last||'не запускалось')}</span></div><button class="secondary-button" data-v3-action="run-automation" data-id="${a.id}">Запустить проверку сейчас</button></article>`).join(''):'<div class="empty-state">Правила автоматизации не созданы</div>';
 }
 
 function renderConstructor(){
@@ -207,8 +188,8 @@ function renderWorkflowBuilder(){
   return `<div class="builder-layout"><article class="panel builder-sidebar"><div class="panel-head"><div><span class="eyebrow">Маршруты</span><h3>Готовые сценарии</h3></div></div><div class="builder-template-list">${v3State.workflows.map(w=>`<div class="builder-template ${w.id===selected.id?'active':''}" data-v3-action="select-workflow" data-id="${w.id}"><div class="template-icon">◈</div><div><strong>${escapeHTML(w.name)}</strong><span>${w.steps.length} этапов</span></div></div>`).join('')}</div></article><article class="panel builder-canvas"><div class="canvas-header"><div><span class="eyebrow">Маршрут согласования</span><h3>${escapeHTML(selected.name)}</h3><span class="muted">${escapeHTML(selected.description)}</span></div><button class="primary-button" data-v3-action="save-workflow">Сохранить маршрут</button></div><div class="workflow-canvas"><div class="workflow-route">${selected.steps.map((step,i)=>`${i?'<span class="workflow-arrow">→</span>':''}<div class="workflow-step"><small>Этап ${i+1}</small><strong>${escapeHTML(step)}</strong><button class="text-button" data-v3-action="remove-workflow-step" data-index="${i}">Удалить</button></div>`).join('')}<span class="workflow-arrow">→</span><button class="secondary-button" data-v3-action="add-workflow-step">+ Добавить этап</button></div><div class="modal-hint">Для каждого этапа в рабочей версии можно задать срок, автоматическое замещение, условия пропуска и уведомления.</div></div></article></div>`;
 }
 function renderRatingBuilder(){
-  const w=v3State.ratingWeights,total=Object.values(w).reduce((a,b)=>a+Number(b),0);const preview=Math.round((96*w.deadlines+91*w.quality+98*w.completeness+88*w.reaction)/Math.max(1,total)*10)/10;
-  return `<div class="rating-builder-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">Вес критериев</span><h3>Формула исполнительской дисциплины</h3></div><span class="tag ${total===100?'green':'red'}">Сумма: ${total}%</span></div><div class="weight-list">${[['deadlines','Соблюдение сроков'],['quality','Качество отчёта'],['completeness','Полнота данных'],['reaction','Скорость реакции']].map(x=>`<div class="weight-row"><span>${x[1]}</span><input type="range" min="0" max="70" value="${w[x[0]]}" data-v3-input="rating-weight" data-key="${x[0]}"/><b class="weight-value" id="weight-${x[0]}">${w[x[0]]}%</b></div>`).join('')}</div><hr style="border-color:var(--line);border-width:1px 0 0;margin:22px 0"><div class="form-grid"><label>Просрочка до 2 часов<select><option>−2 балла</option><option>−1 балл</option><option>Не снижать</option></select></label><label>Повторный возврат<select><option>−5 баллов</option><option>−3 балла</option></select></label><label>Важное поручение<select><option>Коэффициент ×1,25</option><option>×1,5</option></select></label><label>Критическое поручение<select><option>Коэффициент ×2</option><option>×1,5</option></select></label></div><button class="primary-button" style="margin-top:16px" data-v3-action="save-rating-rules">Сохранить правила с новой даты</button></article><article class="panel rating-preview"><span class="eyebrow">Предпросмотр</span><div class="preview-score" id="ratingPreviewScore">${preview}%</div><h3>Пример рейтинга школы</h3><p class="muted">Старые месяцы сохраняют прежнюю формулу. Новые правила применяются только с указанной даты.</p></article></div>`;
+  const w=v3State.ratingWeights,total=Object.values(w).reduce((a,b)=>a+Number(b),0);const preview='—';
+  return `<div class="rating-builder-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">Вес критериев</span><h3>Формула исполнительской дисциплины</h3></div><span class="tag ${total===100?'green':'red'}">Сумма: ${total}%</span></div><div class="weight-list">${[['deadlines','Соблюдение сроков'],['quality','Качество отчёта'],['completeness','Полнота данных'],['reaction','Скорость реакции']].map(x=>`<div class="weight-row"><span>${x[1]}</span><input type="range" min="0" max="70" value="${w[x[0]]}" data-v3-input="rating-weight" data-key="${x[0]}"/><b class="weight-value" id="weight-${x[0]}">${w[x[0]]}%</b></div>`).join('')}</div><hr style="border-color:var(--line);border-width:1px 0 0;margin:22px 0"><div class="form-grid"><label>Просрочка до 2 часов<select><option>−2 балла</option><option>−1 балл</option><option>Не снижать</option></select></label><label>Повторный возврат<select><option>−5 баллов</option><option>−3 балла</option></select></label><label>Важное поручение<select><option>Коэффициент ×1,25</option><option>×1,5</option></select></label><label>Критическое поручение<select><option>Коэффициент ×2</option><option>×1,5</option></select></label></div><button class="primary-button" style="margin-top:16px" data-v3-action="save-rating-rules">Сохранить правила с новой даты</button></article><article class="panel rating-preview"><span class="eyebrow">Предпросмотр</span><div class="preview-score" id="ratingPreviewScore">${preview}%</div><h3>Модельный пример формулы</h3><p class="muted">Это только предварительный расчёт на условных значениях. Реальные рейтинги формируются из поручений и ответов школ.</p></article></div>`;
 }
 function permissionValue(role,key){
   const custom=v3State.permissionOverrides[role]?.[key];if(typeof custom==='boolean')return custom;
@@ -346,7 +327,7 @@ function handleV3Click(event){
   if(action==='inspection-view'){const i=v3State.inspections.find(x=>x.id===el.dataset.id);if(i)showInfoModal(i.type,`<p><b>${escapeHTML(i.school)}</b></p><p>Выявлено нарушений: ${i.violations}. Устранено: ${i.resolved}. Срок: ${i.deadline}.</p><h3>Чек-лист</h3><ul><li>Документы и приказы</li><li>Состояние помещений</li><li>Безопасность и доступ</li><li>Фотофиксация</li></ul>${i.status!=='done'?`<button class="primary-button" onclick="window.resolveInspectionV3('${i.id}')">Подтвердить устранение одного нарушения</button>`:''}`,'Карточка проверки');}
   if(action==='meeting-open'){const m=v3State.meetings.find(x=>x.id===el.dataset.id);showInfoModal(m.title,`<p>${m.day} июля в ${m.time} · ${m.place}</p><h3>Повестка</h3><ol><li>Исполнение текущих поручений</li><li>Подготовка к новому учебному году</li><li>Разное</li></ol><p>Подтвердили участие ${m.confirmed} из ${m.total}.</p>`,'Совещание');}
   if(action==='appeal-next'){const a=v3State.appeals.find(x=>x.id===el.dataset.id);if(a){a.status=a.status==='new'?'work':'done';saveV3();renderAppeals();showToast(a.status==='done'?'Обращение закрыто':'Обращение принято в работу');}}
-  if(action==='download-document'){const d=v3State.documents.find(x=>x.id===el.dataset.id);downloadCSV(`document_${d.id}.csv`,[['Демонстрационный документ'],['Номер',d.number],['Название',d.title],['Дата',d.date],['Категория',d.category]]);showToast('Демонстрационный документ открыт');}
+  if(action==='download-document'){const d=v3State.documents.find(x=>x.id===el.dataset.id);downloadCSV(`document_${d.id}.csv`,[['Документ'],['Номер',d.number],['Название',d.title],['Дата',d.date],['Категория',d.category]]);showToast('Карточка документа скачана');}
   if(action==='read-document'){if(!v3State.documentRead.includes(el.dataset.id))v3State.documentRead.push(el.dataset.id);saveV3();renderDocuments();showToast('Ознакомление подтверждено и зафиксировано');}
   if(action==='personal-complete'){const t=v3State.personalTasks.find(x=>x.id===el.dataset.id);if(t)t.done=!t.done;saveV3();renderPersonal();}
   if(action==='command-result'){document.getElementById('commandModal').classList.add('hidden');navigate(el.dataset.page);if(el.dataset.page==='tasks'&&el.dataset.title){document.getElementById('taskSearch').value=el.dataset.title;renderTasks();}}
@@ -359,19 +340,19 @@ function handleV3Change(event){
   if(el.dataset.v3Change==='dashboard-widget'){v3State.dashboardWidgets[el.dataset.id]=el.checked;saveV3();}
 }
 function handleV3Input(event){
-  const el=event.target;if(el.dataset.v3Input==='rating-weight'){v3State.ratingWeights[el.dataset.key]=Number(el.value);const value=document.getElementById(`weight-${el.dataset.key}`);if(value)value.textContent=el.value+'%';const total=Object.values(v3State.ratingWeights).reduce((a,b)=>a+Number(b),0),score=Math.round((96*v3State.ratingWeights.deadlines+91*v3State.ratingWeights.quality+98*v3State.ratingWeights.completeness+88*v3State.ratingWeights.reaction)/Math.max(1,total)*10)/10;const p=document.getElementById('ratingPreviewScore');if(p)p.textContent=score+'%';}
+  const el=event.target;if(el.dataset.v3Input==='rating-weight'){v3State.ratingWeights[el.dataset.key]=Number(el.value);const value=document.getElementById(`weight-${el.dataset.key}`);if(value)value.textContent=el.value+'%';const p=document.getElementById('ratingPreviewScore');if(p)p.textContent='—';}
 }
 
 function togglePresentation(on){document.body.classList.toggle('presentation-mode',on);document.getElementById('presentationExitButton')?.classList.toggle('hidden',!on);if(on)navigate('situation',false);}
-function exportSchoolPassportV3(){const school=getVisibleSchools().find(s=>s.id===v3State.indicatorSchool);const d=indicatorData(school);downloadCSV('cifrovoy_pasport_shkoly.csv',[['Цифровой паспорт'],['Школа',school.name],['Обучающиеся',d.students],['Классы',d.classes],['Педагоги',d.teachers],['Вакансии',d.vacancies],['Средний балл ГИА',d.gia],['Посещаемость',d.attendance],['Рейтинг',school.rating]]);showToast('Паспорт школы сформирован');}
+function exportSchoolPassportV3(){const school=getVisibleSchools().find(s=>s.id===v3State.indicatorSchool);if(!school)return showToast('Сначала добавьте школу');const d=indicatorData(school);downloadCSV('cifrovoy_pasport_shkoly.csv',[['Цифровой паспорт'],['Школа',school.name],['Обучающиеся',d.students??''],['Классы',d.classes??''],['Педагоги',d.teachers??''],['Вакансии',d.vacancies??''],['Средний балл ГИА',d.gia??''],['Посещаемость',d.attendance??''],['Рейтинг',school.rating??'']]);showToast('Паспорт школы сформирован');}
 function addCustomIndicatorV3(){const name=prompt('Название показателя:','Количество профильных классов');if(!name)return;const value=prompt('Текущее значение:','4');if(value===null)return;v3State.customIndicators.push({name,value});saveV3();renderIndicators();showToast('Показатель добавлен в реестр');}
-function addInspectionV3(){if(isSchoolRole())return showToast('Назначать проверки может только РОО');const school=SCHOOLS[0],type=prompt('Вид проверки:','Тематическая проверка');if(!type)return;v3State.inspections.unshift({id:'i'+Date.now(),schoolId:school.id,school:school.name,type,date:'Сегодня',deadline:'Через 7 дней',violations:0,resolved:0,status:'planned',owner:state.currentUser.name});saveV3();renderInspections();showToast('Проверка запланирована');}
-function addMeetingV3(){if(isSchoolRole())return showToast('Создавать совещания может РОО');const title=prompt('Название совещания:','Рабочее совещание');if(!title)return;v3State.meetings.push({id:'m'+Date.now(),day:'30',month:'ИЮЛ',time:'10:00',title,place:'Зал РОО',confirmed:0,total:34,status:'upcoming'});saveV3();renderMeetings();showToast('Совещание добавлено в календарь');}
-function addAppealV3(){const title=prompt('Тема обращения:','Уточнение по поручению');if(!title)return;v3State.appeals.unshift({id:'A-'+(190+v3State.appeals.length),schoolId:state.currentUser?.schoolId||'s1',school:currentSchool()?.name||state.currentUser?.unit||'РОО',title,text:'Новое обращение, зарегистрированное в системе.',status:'new',priority:'Обычное',time:'Только что'});saveV3();renderAppeals();showToast('Обращение зарегистрировано');}
-function addDocumentV3(){if(isSchoolRole())return showToast('Добавлять документы может только РОО');const title=prompt('Название документа:','Новый официальный документ');if(!title)return;v3State.documents.unshift({id:'d'+Date.now(),type:'PDF',category:'Приказы',number:'Новый',title,date:'21.07.2026',read:0,total:34,required:true});saveV3();renderDocuments();showToast('Документ опубликован');}
+function addInspectionV3(){if(isSchoolRole())return showToast('Назначать проверки может только РОО');const school=SCHOOLS[0];if(!school)return showToast('Сначала добавьте школу');const type=prompt('Вид проверки:','Тематическая проверка');if(!type)return;v3State.inspections.unshift({id:'i'+Date.now(),schoolId:school.id,school:school.name,type,date:'Сегодня',deadline:'Через 7 дней',violations:0,resolved:0,status:'planned',owner:state.currentUser.name});saveV3();renderInspections();showToast('Проверка запланирована');}
+function addMeetingV3(){if(isSchoolRole())return showToast('Создавать совещания может РОО');const title=prompt('Название совещания:','Рабочее совещание');if(!title)return;v3State.meetings.push({id:'m'+Date.now(),day:'30',month:'ИЮЛ',time:'10:00',title,place:'Зал РОО',confirmed:0,total:0,status:'upcoming'});saveV3();renderMeetings();showToast('Совещание добавлено в календарь');}
+function addAppealV3(){const title=prompt('Тема обращения:','Уточнение по поручению');if(!title)return;v3State.appeals.unshift({id:'A-'+(190+v3State.appeals.length),schoolId:state.currentUser?.schoolId||null,school:currentSchool()?.name||state.currentUser?.unit||'РОО',title,text:'Новое обращение, зарегистрированное в системе.',status:'new',priority:'Обычное',time:'Только что'});saveV3();renderAppeals();showToast('Обращение зарегистрировано');}
+function addDocumentV3(){if(isSchoolRole())return showToast('Добавлять документы может только РОО');const title=prompt('Название документа:','Новый официальный документ');if(!title)return;v3State.documents.unshift({id:'d'+Date.now(),type:'PDF',category:'Приказы',number:'Новый',title,date:new Date().toLocaleDateString('ru-RU'),read:0,total:SCHOOLS.length,required:true});saveV3();renderDocuments();showToast('Документ добавлен в текущий браузер. Облачное хранение раздела будет подключено отдельно.');}
 function addPersonalTaskV3(){const title=prompt('Название личной задачи:','Подготовить служебную записку');if(!title)return;v3State.personalTasks.unshift({id:'p'+Date.now(),title,source:'Личная задача',deadline:'Сегодня',priority:'normal',done:false});saveV3();renderPersonal();showToast('Личная задача добавлена');}
 function saveDelegationV3(){const user=document.getElementById('delegationUser').value,from=document.getElementById('delegationFrom').value,to=document.getElementById('delegationTo').value;if(!user||!from||!to)return showToast('Заполните период и сотрудника');v3State.delegation={user,from,to,tasks:document.getElementById('delegationTasks').checked,approvals:document.getElementById('delegationApprovals').checked};saveV3();addAudit('Настроил временное замещение',USERS.find(u=>u.id===user)?.name||'Сотрудник','security');renderPersonal();showToast('Замещение сохранено');}
-function convertProtocolV3(){if(v3State.minutesConverted)return;const titles=['Обновить графики подготовки школ','Проверить готовность пищеблоков','Актуализировать паспорта безопасности'];titles.forEach((title,i)=>state.tasks.unshift({id:Date.now()+i,title,departmentId:i===1?'safety':'general',direction:i===1?'Питание':'Общее образование',deadlineDate:'2026-07-25T14:00',deadline:i===0?'22 июля, 18:00':i===1?'24 июля, 14:00':'25 июля, 16:00',progress:0,completed:0,total:34,received:0,opened:0,overdue:0,returned:0,status:roleConfig().canPublish?'active':'pending_approval',statusText:roleConfig().canPublish?'Активно':'На согласовании',priority:'Важное',creator:state.currentUser.name,recipients:'all',responseType:'Форма + файлы',directorApproval:true,approvalRoute:'По протоколу совещания',weight:1.25,description:'Автоматически создано из протокола совещания №18.',formFields:['Отметка о выполнении','Комментарий','Подтверждающий файл']}));v3State.minutesConverted=true;saveState();saveV3();renderAll();showToast('Из протокола создано 3 поручения');}
+function convertProtocolV3(){showToast('Сначала добавьте реальные пункты протокола. Облачное создание поручений из протокола будет подключено отдельно.');}
 
 // После загрузки V3 сразу применяет доступность модулей к уже отрисованному меню.
 document.addEventListener('DOMContentLoaded',()=>{applyV3NavigationVisibility();renderV3();if(!v3State.updateDismissed)setTimeout(()=>document.getElementById('systemUpdateBanner')?.classList.remove('hidden'),450);});

@@ -44,13 +44,13 @@ function renderV5Dashboard(){
     ['◷','Требуют действия',tasks.filter(t=>['active','review','overdue'].includes(t.status)).length,'Откройте список поручений','orange'],
     ['!','Просрочено',overdue,'Нужно выполнить в первую очередь','red'],
     ['✓','Принято',done,'Отчёты приняты РОО','green'],
-    ['★','Рейтинг школы',school?school.rating.toFixed(1)+'%':'—',school?`${school.place} место в районе`:'Нет данных','blue']
+    ['★','Рейтинг школы',school&&Number.isFinite(Number(school.rating))?Number(school.rating).toFixed(1)+'%':'—',school&&Number.isFinite(Number(school.rating))&&school.place?`${school.place} место в районе`:'Рейтинг не рассчитан','blue']
   ]:[
     ['▤','Активные поручения',active,'Открыть полный список','green'],
     ['◷','На рассмотрении',review,'Ожидают проверки','orange'],
     ['!','Просрочено',overdue,'Требуют контроля','red'],
     ['✓','Выполнено',done,'Принято и закрыто','green'],
-    ['★','Рейтинг района','4,68','↑ на 1 позицию','blue']
+    ['★','Школ с рейтингом',SCHOOLS.filter(s=>Number.isFinite(Number(s.rating))).length,'После выполнения поручений','blue']
   ];
   const kpiRoot=document.getElementById('v5Kpis');
   if(kpiRoot)kpiRoot.innerHTML=kpis.map(([icon,label,value,note,tone])=>`<article class="v5-kpi-card ${tone}"><div class="v5-kpi-icon">${icon}</div><div><span>${v5Esc(label)}</span><strong>${v5Esc(value)}</strong><small>${v5Esc(note)} →</small></div></article>`).join('');
@@ -60,8 +60,8 @@ function renderV5Dashboard(){
   if(review)attention.push(['◷','Отчёты на рассмотрении',`${review} ответов ожидают вашего решения`,'orange','approvals']);
   const pending=tasks.filter(t=>t.status==='pending_approval').length;
   if(pending)attention.push(['▤','Документы у директора',`${pending} поручений находятся на согласовании`,'orange','approvals']);
-  const appeals=(typeof v3State!=='undefined'?v3State.appeals.filter(a=>a.status!=='done').length:3);
-  attention.push(['✉','Новые обращения',`${appeals} обращений требуют ответа`,'blue','appeals']);
+  const appeals=(typeof v3State!=='undefined'?v3State.appeals.filter(a=>a.status!=='done').length:0);
+  if(appeals)attention.push(['✉','Новые обращения',`${appeals} обращений требуют ответа`,'blue','appeals']);
   const attentionRoot=document.getElementById('v5Attention');
   if(attentionRoot)attentionRoot.innerHTML=attention.slice(0,4).map(([icon,title,sub,tone,page])=>`<div class="v5-attention-item ${tone}" data-v5-page="${page}"><div class="v5-attention-icon">${icon}</div><div><strong>${v5Esc(title)}</strong><span>${v5Esc(sub)}</span></div><b>›</b></div>`).join('');
 
@@ -74,7 +74,7 @@ function renderV5Dashboard(){
       const metrics=[['Сроки',Math.round((school.onTime/Math.max(1,school.tasks))*100)],['Качество',school.quality],['Полнота',school.completeness],['Реакция',school.response]];
       rankingRoot.innerHTML=metrics.map((m,i)=>`<div class="v5-ranking-item"><div class="v5-rank ${i===0?'gold':''}">${i+1}</div><div><div class="v5-ranking-name">${m[0]}</div><div class="v5-rating-bar"><i style="width:${m[1]}%"></i></div></div><div class="v5-ranking-score">${m[1]}%</div></div>`).join('');
     }else{
-      rankingRoot.innerHTML=SCHOOLS.slice(0,5).map((s,i)=>`<div class="v5-ranking-item" data-school-card="${s.id}"><div class="v5-rank ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${i+1}</div><div><div class="v5-ranking-name">${v5Esc(s.name)}</div><div class="v5-rating-bar"><i style="width:${Math.min(100,s.rating)}%"></i></div></div><div class="v5-ranking-score">${String(s.rating).replace('.',',')}</div></div>`).join('');
+      const rated=SCHOOLS.filter(s=>Number.isFinite(Number(s.rating))).slice(0,5);rankingRoot.innerHTML=rated.length?rated.map((s,i)=>`<div class="v5-ranking-item" data-school-card="${s.id}"><div class="v5-rank ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${i+1}</div><div><div class="v5-ranking-name">${v5Esc(s.name)}</div><div class="v5-rating-bar"><i style="width:${Math.min(100,Number(s.rating))}%"></i></div></div><div class="v5-ranking-score">${String(s.rating).replace('.',',')}%</div></div>`).join(''):'<div class="empty-state">Рейтинг пока не рассчитан</div>';
     }
   }
 
@@ -90,7 +90,7 @@ function updateV5Header(){
   const eyebrow=document.getElementById('pageEyebrow');const title=document.getElementById('pageTitle');
   if(eyebrow)eyebrow.textContent='Отдел Образования';
   if(title)title.textContent='Ачхой-Мартановского Района';
-  const version=document.getElementById('versionButton');if(version)version.textContent='V5';
+  const version=document.getElementById('versionButton');if(version)version.textContent='V22';
 }
 
 const _v5RenderAll=renderAll;

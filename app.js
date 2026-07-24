@@ -17,28 +17,28 @@ const ROLE_CONFIG = {
   },
   department_head: {
     label: 'Начальник отдела',
-    scope: 'Только отдел мониторинга и ГИА',
+    scope: 'Только назначенное подразделение',
     pages: ['dashboard','tasks','approvals','schools','rating','departments','reports','calendar','archive','audit'],
     permissions: ['Создание поручений своего отдела','Проверка ответов школ','Возврат на исправление','Своды по своему направлению','Просмотр рейтинга','Журнал действий своего отдела'],
     canCreate: true, canPublish: false, canApprove: true, canManageSchools: false, canManageUsers: false, canEditRating: false, canViewAudit: true
   },
   specialist: {
     label: 'Специалист отдела',
-    scope: 'Назначенные поручения отдела мониторинга и ГИА',
+    scope: 'Назначенные поручения своего подразделения',
     pages: ['dashboard','tasks','schools','rating','reports','calendar','archive'],
     permissions: ['Подготовка черновиков поручений','Проверка назначенных ответов','Формирование сводов своего отдела','Просмотр школ и рейтинга'],
     canCreate: true, canPublish: false, canApprove: false, canManageSchools: false, canManageUsers: false, canEditRating: false, canViewAudit: false
   },
   school_director: {
     label: 'Директор школы',
-    scope: 'Только МБОУ «СОШ №1 г. Ачхой-Мартан»',
+    scope: 'Только назначенная образовательная организация',
     pages: ['dashboard','tasks','rating','calendar','archive'],
     permissions: ['Все поручения своей школы','Назначение ответственного','Подтверждение отчёта перед отправкой','Рейтинг и причины снижения своей школы','Архив документов школы'],
     canCreate: false, canPublish: false, canApprove: true, canManageSchools: false, canManageUsers: false, canEditRating: false, canViewAudit: false
   },
   school_staff: {
     label: 'Ответственный сотрудник школы',
-    scope: 'Назначенные поручения МБОУ «СОШ №1 г. Ачхой-Мартан»',
+    scope: 'Назначенные поручения своей образовательной организации',
     pages: ['dashboard','tasks','calendar','archive'],
     permissions: ['Просмотр назначенных поручений','Подтверждение получения','Заполнение форм','Загрузка файлов и отправка директору','Исправление замечаний'],
     canCreate: false, canPublish: false, canApprove: false, canManageSchools: false, canManageUsers: false, canEditRating: false, canViewAudit: false
@@ -46,12 +46,12 @@ const ROLE_CONFIG = {
 };
 
 const DEPARTMENTS = [
-  { id:'management', name:'Руководство РОО', short:'Руководство', icon:'Р', head:'Магомед А. Ахмадов', staff:4, active:12, overdue:1, completion:96 },
-  { id:'gia', name:'Отдел мониторинга, ГИА и качества образования', short:'ГИА и мониторинг', icon:'Г', head:'Али М. Исаев', staff:6, active:8, overdue:2, completion:91 },
-  { id:'general', name:'Отдел общего и дошкольного образования', short:'Общее образование', icon:'О', head:'Мадина С. Хамзатова', staff:7, active:10, overdue:1, completion:94 },
-  { id:'upbringing', name:'Отдел воспитания и дополнительного образования', short:'Воспитание', icon:'В', head:'Зарема Р. Дадаева', staff:5, active:7, overdue:3, completion:86 },
-  { id:'resources', name:'Отдел кадрового и ресурсного обеспечения', short:'Кадры и ресурсы', icon:'К', head:'Руслан Х. Эльмурзаев', staff:6, active:9, overdue:2, completion:89 },
-  { id:'safety', name:'Отдел безопасности, питания и хозяйственной работы', short:'Безопасность', icon:'Б', head:'Саид М. Батаев', staff:5, active:6, overdue:2, completion:88 }
+  { id:'management', name:'Руководство РОО', short:'Руководство', icon:'Р', head:'Не указан', email:'', staff:0, active:0, overdue:0, completion:null },
+  { id:'upbringing', name:'Отдел воспитательной работы', short:'Воспитательная работа', icon:'В', head:'Не указан', email:'ruo.ovdo@mail.ru', staff:0, active:0, overdue:0, completion:null },
+  { id:'general', name:'Общий отдел', short:'Общий отдел', icon:'О', head:'Не указан', email:'ruo.npo@mail.ru', staff:0, active:0, overdue:0, completion:null },
+  { id:'methodical', name:'Методический отдел', short:'Методический отдел', icon:'М', head:'Не указан', email:'infometod@bk.ru', staff:0, active:0, overdue:0, completion:null },
+  { id:'resources', name:'Хозяйственный отдел', short:'Хозяйственный отдел', icon:'Х', head:'Не указан', email:'ruo.khg@mail.ru', staff:0, active:0, overdue:0, completion:null },
+  { id:'information', name:'Информационный отдел', short:'Информационный отдел', icon:'И', head:'Не указан', email:'roo.inform@mail.ru', staff:0, active:0, overdue:0, completion:null }
 ];
 
 const USERS = [{ id:'bootstrap-chief', role:'chief', name:'Пользователь', initials:'П', email:'', unit:'Руководство РОО', departmentId:'management', lastLogin:'', active:true }];
@@ -253,7 +253,7 @@ function taskOwnStatus(task) {
 
 function applyRole(role) {
   state.role = ROLE_CONFIG[role] ? role : 'chief';
-  state.currentUser = USERS.find(u => u.id === ROLE_USER_MAP[state.role]);
+  state.currentUser = USERS.find(u => u.id === ROLE_USER_MAP[state.role]) || {id:`fallback-${state.role}`,role:state.role,name:'Пользователь',initials:'П',email:'',unit:ROLE_CONFIG[state.role]?.label||'Система',departmentId:null,schoolId:null,active:true};
   saveState();
 
   const config = roleConfig();
@@ -366,9 +366,9 @@ function renderDashboard() {
   const dept = currentDepartment();
 
   const roleTexts = {
-    chief:['Исполнение поручений под полным контролем','Сегодня истекает срок по 4 поручениям. 3 школы ещё не подтвердили получение.','Вы видите все данные района','Доступны все школы, отделы, пользователи, рейтинги и полный журнал действий.'],
+    chief:['Исполнение поручений под контролем','Сводка формируется по фактическим поручениям, срокам и ответам школ.','Вы видите доступные данные района','Доступны школы, отделы, пользователи, рейтинги и журнал действий в пределах назначенных прав.'],
     deputy:['Контроль курируемых направлений и согласований','На согласовании находятся важные поручения и сводные отчёты подразделений.','Доступ заместителя начальника','Доступны поручения всех отделов, рейтинги, школы и решения по согласованию.'],
-    department_head:['Работа отдела мониторинга и ГИА','В отделе есть ответы школ на проверке и поручения, требующие публикации.','Данные ограничены вашим отделом','Отображаются поручения, отчёты и журнал отдела мониторинга и ГИА.'],
+    department_head:['Работа вашего отдела','Здесь отображаются поручения и ответы школ, доступные вашему подразделению.','Данные ограничены вашим отделом','Отображаются поручения, отчёты и журнал назначенного подразделения.'],
     specialist:['Ваши поручения и ответы школ','Продолжите проверку поступивших отчётов или подготовьте новый черновик поручения.','Доступ специалиста отдела','Вы видите только поручения своего отдела и назначенные рабочие материалы.'],
     school_director:['Исполнительская дисциплина вашей школы','Подтвердите отчёты сотрудников перед окончательной отправкой в отдел образования.','Кабинет директора школы','Доступны только поручения, рейтинг и документы вашей образовательной организации.'],
     school_staff:['Новые поручения и ближайшие сроки','Подтвердите получение, заполните форму и отправьте отчёт директору школы.','Кабинет ответственного сотрудника','Отображаются только назначенные поручения вашей школы.'],
@@ -416,10 +416,10 @@ function renderDashboard() {
 
   if (isSchoolRole()) {
     const s = school;
-    const breakdown = [
-      ['Сроки', Math.round((s.onTime/s.tasks)*100)], ['Качество',s.quality], ['Полнота',s.completeness], ['Реакция',s.response]
-    ];
-    dom.topSchools.innerHTML = breakdown.map(([label,value],i) => `<div class="top-school"><div class="rank ${i===0?'gold':''}">${i+1}</div><div><strong>${label}</strong><span>Составляющая рейтинга</span></div><div class="school-score"><b>${value}%</b><small>${value>=90?'Высоко':'Улучшить'}</small></div></div>`).join('');
+    const breakdown = s && Number(s.tasks)>0 ? [
+      ['Сроки', Math.round((Number(s.onTime||0)/Math.max(1,Number(s.tasks||0)))*100)], ['Качество',s.quality], ['Полнота',s.completeness], ['Реакция',s.response]
+    ].filter(([,value])=>Number.isFinite(Number(value))) : [];
+    dom.topSchools.innerHTML = breakdown.length ? breakdown.map(([label,value],i) => `<div class="top-school"><div class="rank ${i===0?'gold':''}">${i+1}</div><div><strong>${label}</strong><span>Составляющая рейтинга</span></div><div class="school-score"><b>${value}%</b><small>${value>=90?'Высоко':'Улучшить'}</small></div></div>`).join('') : '<div class="empty-state">Рейтинг появится после выполнения поручений</div>';
   } else {
     dom.topSchools.innerHTML = SCHOOLS.slice(0,4).map((s,i) => `<div class="top-school" data-school-card="${s.id}"><div class="rank ${i===0?'gold':i===1?'silver':i===2?'bronze':''}">${i+1}</div><div><strong>${escapeHTML(s.name)}</strong><span>${s.tasks} поручения · ${s.overdue} просрочек</span></div><div class="school-score"><b>${s.rating}%</b><small class="${s.trend>=0?'delta-up':'delta-down'}">${s.trend>=0?'↑':'↓'} ${Math.abs(s.trend)}</small></div></div>`).join('');
   }
@@ -576,96 +576,68 @@ function renderSchools() {
 }
 
 function openSchoolModal(schoolId) {
-  const school = SCHOOLS.find(s => s.id === schoolId);
-  if (!school) return;
-  dom.schoolModalTitle.textContent = school.name;
-  const deadlineScore = Math.round((school.onTime / school.tasks) * 100);
-  dom.schoolModalContent.innerHTML = `
-    <div class="school-profile-head"><div class="school-logo">${school.place}</div><div><strong>${escapeHTML(school.name)}</strong><span>Директор: ${escapeHTML(school.director)}<br>Ответственный: ${escapeHTML(school.responsible)}</span></div><span class="tag ${school.risk==='good'?'green':school.risk==='attention'?'orange':'red'}">${riskLabel(school.risk)}</span></div>
-    <div class="school-profile-stats"><div><b>${school.rating}%</b><span>Рейтинг</span></div><div><b>${school.place}</b><span>Место</span></div><div><b>${school.overdue}</b><span>Просрочки</span></div><div><b>${school.returned}</b><span>Возвраты</span></div></div>
-    <div class="drawer-card"><h3>Составляющие рейтинга</h3><div class="rating-breakdown">
-      ${[['Соблюдение сроков',deadlineScore],['Качество данных',school.quality],['Полнота ответа',school.completeness],['Скорость реакции',school.response]].map(([label,value])=>`<div class="breakdown-row"><span>${label}</span><div class="mini-progress"><i style="width:${value}%"></i></div><b>${value}%</b></div>`).join('')}
-    </div></div>
-    <div class="drawer-card"><h3>Последние замечания</h3><div class="timeline"><div class="timeline-item"><i class="timeline-dot"></i><div><strong>Проверить показатели по ГИА</strong><span>Два значения отличаются от предыдущей версии</span></div><time>21 июля</time></div><div class="timeline-item"><i class="timeline-dot"></i><div><strong>Отчёт по кадрам принят</strong><span>После одного исправления</span></div><time>20 июля</time></div></div></div>
-    <div class="modal-actions"><button class="secondary-button" data-school-report="${school.id}">Скачать карточку</button>${roleConfig().canEditRating?`<button class="primary-button" data-edit-school-rating="${school.id}">Корректировать рейтинг</button>`:''}</div>`;
+  const school=SCHOOLS.find(s=>s.id===schoolId);if(!school)return;
+  dom.schoolModalTitle.textContent=school.name;
+  const rating=Number.isFinite(Number(school.rating))?Number(school.rating):null;
+  const closed=Number(school.onTime||0)+Number(school.overdue||0);
+  const deadlineScore=closed?Math.round(Number(school.onTime||0)/closed*100):null;
+  const parts=[['Соблюдение сроков',deadlineScore],['Качество данных',school.quality],['Полнота ответа',school.completeness],['Скорость реакции',school.response]];
+  dom.schoolModalContent.innerHTML=`
+    <div class="school-profile-head"><div class="school-logo">${school.place||'—'}</div><div><strong>${escapeHTML(school.name)}</strong><span>Директор: ${escapeHTML(school.director||'не указан')}<br>Ответственный: ${escapeHTML(school.responsible||'не указан')}</span></div></div>
+    <div class="school-profile-stats"><div><b>${rating===null?'—':rating.toFixed(1)+'%'}</b><span>Рейтинг</span></div><div><b>${school.place||'—'}</b><span>Место</span></div><div><b>${school.overdue||0}</b><span>Просрочки</span></div><div><b>${school.returned||0}</b><span>Возвраты</span></div></div>
+    <div class="drawer-card"><h3>Составляющие рейтинга</h3><div class="rating-breakdown">${parts.map(([label,value])=>{const n=Number(value);const ok=Number.isFinite(n);return `<div class="breakdown-row"><span>${label}</span><div class="mini-progress"><i style="width:${ok?Math.max(0,Math.min(100,n)):0}%"></i></div><b>${ok?Math.round(n)+'%':'—'}</b></div>`;}).join('')}</div></div>
+    <div class="drawer-card"><h3>Замечания и история</h3><div class="empty-state">Записи появятся после проверки реальных отчётов школы.</div></div>
+    <div class="modal-actions"><button class="secondary-button" data-school-report="${school.id}">Скачать карточку</button></div>`;
   openModal('schoolModal');
-  document.querySelector('[data-school-report]')?.addEventListener('click', () => downloadSchoolCard(school));
-  document.querySelector('[data-edit-school-rating]')?.addEventListener('click', () => showInfoModal('Корректировка рейтинга', '<p>В рабочей версии изменение возможно только с указанием причины и подтверждением начальника РОО. Старое и новое значение сохраняются в журнале.</p>', 'Защищённое действие'));
+  document.querySelector('[data-school-report]')?.addEventListener('click',()=>downloadSchoolCard(school));
 }
 
 function renderRating() {
-  const query = dom.ratingSearch.value.trim().toLowerCase();
-  const visible = getRatingSchools().filter(s => !query || s.name.toLowerCase().includes(query));
-  const values = visible.map(ratingValue);
-  const average = values.length ? values.reduce((a,b)=>a+b,0)/values.length : 0;
-  const own = currentSchool();
-
-  dom.ratingHero.innerHTML = `
-    <div class="rating-main-card"><span>${isSchoolRole()?'Рейтинг вашей школы':'Средний рейтинг доступного контура'}</span><strong>${isSchoolRole()?ratingValue(own).toFixed(1):average.toFixed(1)}%</strong><small>${isSchoolRole()?`${own.place} место в районе`:'+4,2% к прошлому месяцу'}</small></div>
-    <div class="rating-metric"><span>Без просрочек</span><strong>${isSchoolRole()?(own.overdue===0?'Да':'Нет'):`${SCHOOLS.filter(s=>s.overdue===0).length} школ`}</strong><div class="mini-progress"><i style="width:${isSchoolRole()?(own.overdue===0?100:60):71}%"></i></div></div>
-    <div class="rating-metric"><span>Выполнение вовремя</span><strong>${isSchoolRole()?Math.round(own.onTime/own.tasks*100):92}%</strong><div class="mini-progress"><i style="width:${isSchoolRole()?Math.round(own.onTime/own.tasks*100):92}%"></i></div></div>
-    <div class="rating-metric"><span>Качество данных</span><strong>${isSchoolRole()?own.quality:91}%</strong><div class="mini-progress"><i style="width:${isSchoolRole()?own.quality:91}%"></i></div></div>`;
-
-  dom.ratingTableBody.innerHTML = visible.sort((a,b)=>ratingValue(b)-ratingValue(a)).map((school,index) => {
-    const value = ratingValue(school);
-    const cls = value>=90?'':value>=80?'warn':'bad';
-    return `<tr><td><span class="position-badge ${school.place<=3?'top':''}">${school.place}</span></td><td class="task-title-cell"><strong>${escapeHTML(school.name)}</strong><span>${escapeHTML(school.director)}</span></td><td>${school.tasks}</td><td>${school.onTime}</td><td>${school.overdue}</td><td>${school.returned}</td><td>${school.quality}%</td><td><span class="${school.trend>=0?'delta-up':'delta-down'}">${school.trend>=0?'↑':'↓'} ${Math.abs(school.trend)}</span></td><td><button class="rating-score ${cls}" data-school-card="${school.id}">${value.toFixed(1)}%</button></td></tr>`;
-  }).join('') || '<tr><td colspan="9" class="empty-state">Нет данных рейтинга</td></tr>';
+  const query=dom.ratingSearch.value.trim().toLowerCase();
+  const visible=getRatingSchools().filter(s=>(!query||s.name.toLowerCase().includes(query))&&Number.isFinite(Number(s.rating))).sort((a,b)=>Number(b.rating)-Number(a.rating));
+  const values=visible.map(s=>Number(s.rating));const average=values.length?values.reduce((a,b)=>a+b,0)/values.length:null;
+  const own=currentSchool();const ownRating=Number.isFinite(Number(own?.rating))?Number(own.rating):null;
+  dom.ratingHero.innerHTML=`<div class="rating-main-card"><span>${isSchoolRole()?'Рейтинг вашей школы':'Средний рейтинг доступного контура'}</span><strong>${isSchoolRole()?(ownRating===null?'—':ownRating.toFixed(1)+'%'):(average===null?'—':average.toFixed(1)+'%')}</strong><small>${values.length?'Рассчитано по фактическим данным':'Недостаточно данных для расчёта'}</small></div>`;
+  dom.ratingTableBody.innerHTML=visible.length?visible.map((school,index)=>`<tr><td><span class="position-badge ${index<3?'top':''}">${school.place||index+1}</span></td><td class="task-title-cell"><strong>${escapeHTML(school.name)}</strong><span>${escapeHTML(school.director||'Директор не указан')}</span></td><td>${school.tasks||0}</td><td>${school.onTime||0}</td><td>${school.overdue||0}</td><td>${school.returned||0}</td><td>${Number.isFinite(Number(school.quality))?Math.round(Number(school.quality))+'%':'—'}</td><td>${Number.isFinite(Number(school.trend))?(Number(school.trend)>=0?'↑ ':'↓ ')+Math.abs(Number(school.trend)):'—'}</td><td><button class="rating-score" data-school-card="${school.id}">${Number(school.rating).toFixed(1)}%</button></td></tr>`).join(''):'<tr><td colspan="9" class="empty-state">Рейтинг ещё не рассчитан</td></tr>';
   bindDynamicOpeners();
 }
 
 function renderDepartments() {
-  if (!roleConfig().pages.includes('departments')) return;
-  const visible = isDepartmentRole() ? DEPARTMENTS.filter(d => d.id === state.currentUser.departmentId) : DEPARTMENTS;
-  dom.departmentGrid.innerHTML = visible.map(dept => `<article class="department-card"><div class="department-card-head"><div class="department-icon">${dept.icon}</div><span class="tag ${dept.completion>=92?'green':dept.completion>=88?'orange':'red'}">${dept.completion}%</span></div><h3>${escapeHTML(dept.name)}</h3><p>Начальник: ${escapeHTML(dept.head)}</p><div class="department-stats"><div><b>${dept.staff}</b><span>Сотрудников</span></div><div><b>${dept.active}</b><span>Активных</span></div><div><b>${dept.overdue}</b><span>Просрочек</span></div></div></article>`).join('');
-  const maxActive = Math.max(...visible.map(d=>d.active),1);
-  dom.departmentLoadChart.innerHTML = visible.map(dept => `<div class="horizontal-row"><span>${escapeHTML(dept.short)}</span><div class="horizontal-track"><i style="width:${Math.round(dept.active/maxActive*100)}%"></i></div><b>${dept.active}</b></div>`).join('');
-  dom.departmentHeads.innerHTML = visible.map(dept => `<div class="person-item"><div class="avatar">${dept.icon}${dept.head.charAt(0)}</div><div><strong>${escapeHTML(dept.head)}</strong><span>${escapeHTML(dept.short)}</span></div><b>${dept.completion}%</b></div>`).join('');
+  if(!roleConfig().pages.includes('departments'))return;
+  const visible=isDepartmentRole()?DEPARTMENTS.filter(d=>d.id===state.currentUser.departmentId):DEPARTMENTS;
+  dom.departmentGrid.innerHTML=visible.length?visible.map(dept=>{const value=Number(dept.completion);const rated=Number.isFinite(value);return `<article class="department-card"><div class="department-card-head"><div class="department-icon">${dept.icon}</div><span class="tag">${rated?value+'%':'Не рассчитано'}</span></div><h3>${escapeHTML(dept.name)}</h3><p>Начальник: ${escapeHTML(dept.head||'не указан')}</p><div class="department-stats"><div><b>${dept.staff||0}</b><span>Сотрудников</span></div><div><b>${dept.active||0}</b><span>Активных</span></div><div><b>${dept.overdue||0}</b><span>Просрочек</span></div></div></article>`;}).join(''):'<div class="empty-state">Подразделения не добавлены</div>';
+  const maxActive=Math.max(...visible.map(d=>Number(d.active)||0),1);
+  dom.departmentLoadChart.innerHTML=visible.map(dept=>`<div class="horizontal-row"><span>${escapeHTML(dept.short)}</span><div class="horizontal-track"><i style="width:${Math.round((Number(dept.active)||0)/maxActive*100)}%"></i></div><b>${Number(dept.active)||0}</b></div>`).join('');
+  dom.departmentHeads.innerHTML=visible.map(dept=>`<div class="person-item"><div class="avatar">${dept.icon}</div><div><strong>${escapeHTML(dept.head||'Не указан')}</strong><span>${escapeHTML(dept.short)}</span></div><b>${Number.isFinite(Number(dept.completion))?dept.completion+'%':'—'}</b></div>`).join('');
 }
 
 function renderReports() {
-  const taskCount = getVisibleTasks().length;
-  const summary = [[12,'Готовых сводок'],[4,'Обновлены сегодня'],[taskCount,'Источников данных'],['0','Ручных объединений']];
-  dom.reportSummary.innerHTML = summary.map(([value,label])=>`<div class="summary-card"><strong>${value}</strong><span>${label}</span></div>`).join('');
-  const reports = [
-    ['XLS','Ежемесячный рейтинг школ','Июль 2026 · актуальные данные','rating'],
-    ['PDF','Исполнительская дисциплина','Сводка по всем доступным направлениям','discipline'],
-    ['XLS','Анализ результатов ГИА','Автоматическая сводка из форм школ','gia'],
-    ['PDF','Просроченные поручения','Список школ и ответственных','overdue'],
-    ['XLS','Работа отделов РОО','Нагрузка и показатели подразделений','departments'],
-    ['PDF','Аналитическая записка руководителю','Ключевые риски и решения','brief']
-  ];
-  dom.reportGrid.innerHTML = reports.map(([icon,title,subtitle,type])=>`<article class="report-card"><div class="report-icon">${icon}</div><div><strong>${title}</strong><span>${subtitle}</span></div><button data-download-report="${type}">Скачать</button></article>`).join('');
-  document.querySelectorAll('[data-download-report]').forEach(button => button.addEventListener('click', () => downloadReport(button.dataset.downloadReport)));
+  const tasks=getVisibleTasks();const completed=tasks.filter(t=>['done','accepted'].includes(t.status)).length;const overdue=tasks.filter(t=>t.status==='overdue').length;
+  dom.reportSummary.innerHTML=[[tasks.length,'Поручений в доступе'],[completed,'Завершено'],[overdue,'Просрочено'],[getVisibleSchools().length,'Школ в доступе']].map(([value,label])=>`<div class="summary-card"><strong>${value}</strong><span>${label}</span></div>`).join('');
+  const reports=[['XLS','Рейтинг школ','Только рассчитанные показатели','rating'],['PDF','Исполнительская дисциплина','Поручения и фактические статусы','discipline'],['XLS','Анализ результатов экзаменов','По загруженным результатам','gia'],['PDF','Просроченные поручения','Фактический список просрочек','overdue'],['XLS','Работа отделов РОО','Поручения и ответы подразделений','departments']];
+  dom.reportGrid.innerHTML=reports.map(([icon,title,subtitle,type])=>`<article class="report-card"><div class="report-icon">${icon}</div><div><strong>${title}</strong><span>${subtitle}</span></div><button data-download-report="${type}">Скачать</button></article>`).join('');
+  document.querySelectorAll('[data-download-report]').forEach(button=>button.addEventListener('click',()=>downloadReport(button.dataset.downloadReport)));
 }
 
 function renderCalendar() {
-  const days = [];
-  for (let i=29;i<=30;i++) days.push({n:i,dim:true});
-  for (let i=1;i<=31;i++) days.push({n:i,today:i===21,event:[3,7,12,17,19,20,21,22,23,24,25,26,27,30].includes(i)});
-  for (let i=1;i<=3;i++) days.push({n:i,dim:true});
-  dom.calendarDays.innerHTML = days.map(d=>`<button class="calendar-day ${d.dim?'dim':''} ${d.today?'today':''} ${d.event?'has-event':''} ${!d.dim&&d.n===state.selectedCalendarDay?'selected':''}" ${d.dim?'disabled':''} data-calendar-day="${d.n}"><b>${d.n}</b></button>`).join('');
-  renderAgenda(state.selectedCalendarDay);
-  document.querySelectorAll('[data-calendar-day]').forEach(button => button.addEventListener('click', () => { state.selectedCalendarDay=Number(button.dataset.calendarDay); renderCalendar(); }));
+  const now=new Date(),year=now.getFullYear(),month=now.getMonth();const first=new Date(year,month,1);const daysInMonth=new Date(year,month+1,0).getDate();const offset=(first.getDay()+6)%7;const dueDays=new Set(getVisibleTasks().map(t=>new Date(t.deadlineDate||'')).filter(d=>!Number.isNaN(d.getTime())&&d.getFullYear()===year&&d.getMonth()===month).map(d=>d.getDate()));
+  const days=[];for(let i=0;i<offset;i++)days.push({n:'',dim:true});for(let i=1;i<=daysInMonth;i++)days.push({n:i,today:i===now.getDate(),event:dueDays.has(i)});
+  dom.calendarDays.innerHTML=days.map(d=>d.dim?'<span class="calendar-day dim"></span>':`<button class="calendar-day ${d.today?'today':''} ${d.event?'has-event':''} ${d.n===state.selectedCalendarDay?'selected':''}" data-calendar-day="${d.n}"><b>${d.n}</b></button>`).join('');
+  if(!state.selectedCalendarDay||state.selectedCalendarDay>daysInMonth)state.selectedCalendarDay=now.getDate();renderAgenda(state.selectedCalendarDay);
+  document.querySelectorAll('[data-calendar-day]').forEach(button=>button.addEventListener('click',()=>{state.selectedCalendarDay=Number(button.dataset.calendarDay);renderCalendar();}));
 }
 
 function renderAgenda(day) {
-  dom.agendaDate.textContent = `${day} июля`;
-  const eventsByDay = {
-    21:[['11:00','Сведения о молодых специалистах','Срок истёк · 8 школ не отправили','red'],['14:00','Свод по результатам ГИА-2026','31 из 34 школ выполнили','orange'],['16:30','Совещание с директорами школ','Актовый зал отдела образования','green']],
-    22:[['12:00','Сведения о наличии учебников','Срок выполнения поручения','orange'],['15:00','Проверка сводной таблицы','Отдел общего образования','blue']],
-    24:[['15:00','Результаты диагностических работ','Срок по поручению ГИА','orange']],
-    25:[['13:00','План мероприятий ко Дню знаний','Срок по поручению отдела воспитания','orange']],
-    26:[['18:00','Анкета готовности к учебному году','Критическое поручение','red']]
-  };
-  const events = eventsByDay[day] || [['—','Нет обязательных событий','Можно запланировать новое мероприятие','green']];
-  dom.agendaList.innerHTML = events.map(([time,title,text,color])=>`<div class="agenda-item ${color}"><time>${time}</time><strong>${title}</strong><span>${text}</span></div>`).join('');
+  const now=new Date(),date=new Date(now.getFullYear(),now.getMonth(),day);dom.agendaDate.textContent=date.toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
+  const tasks=getVisibleTasks().filter(t=>{const d=new Date(t.deadlineDate||'');return !Number.isNaN(d.getTime())&&d.toDateString()===date.toDateString();});
+  dom.agendaList.innerHTML=tasks.length?tasks.map(t=>`<div class="agenda-item ${t.status==='overdue'?'red':'orange'}"><time>${escapeHTML((t.deadline||'').split(', ')[1]||'—')}</time><strong>${escapeHTML(t.title)}</strong><span>${escapeHTML(t.direction||'Направление не указано')}</span></div>`).join(''):'<div class="empty-state">На этот день сроки не назначены</div>';
 }
 
 function renderArchive() {
-  const years = [['2025–2026',684,1928],['2024–2025',731,2107],['2023–2024',598,1756]];
-  dom.archiveYears.innerHTML = years.map(([year,tasks,docs])=>`<article><span>${year}</span><strong>${tasks} поручений</strong><small>${docs} документов · версии файлов сохранены</small><button data-archive-year="${year}">Открыть →</button></article>`).join('');
-  document.querySelectorAll('[data-archive-year]').forEach(button => button.addEventListener('click',()=>showToast(`Открыт архив ${button.dataset.archiveYear} учебного года`)));
+  const grouped={};getVisibleTasks().forEach(t=>{const d=new Date(t.deadlineDate||Date.now());const y=d.getMonth()>=7?`${d.getFullYear()}–${d.getFullYear()+1}`:`${d.getFullYear()-1}–${d.getFullYear()}`;grouped[y]=(grouped[y]||0)+1;});
+  const years=Object.entries(grouped).sort((a,b)=>b[0].localeCompare(a[0]));
+  dom.archiveYears.innerHTML=years.length?years.map(([year,tasks])=>`<article><span>${year}</span><strong>${tasks} поручений</strong><small>Документы появляются после загрузки файлов</small><button data-archive-year="${year}">Открыть →</button></article>`).join(''):'<div class="empty-state">Архив появится после создания поручений</div>';
+  document.querySelectorAll('[data-archive-year]').forEach(button=>button.addEventListener('click',()=>showToast(`Открыт архив ${button.dataset.archiveYear} учебного года`)));
 }
 
 function renderUsers() {
@@ -839,7 +811,7 @@ function createTaskFromForm(event) {
   let statusText = 'Активно';
   if (state.role === 'specialist') { status='draft';statusText='Черновик'; }
   else if (state.role === 'department_head' && (recipients==='all' || priority==='Критическое' || dom.newTaskApprovalRoute.value!=='none')) { status='pending_approval';statusText='На согласовании'; }
-  const total = recipients==='city'?8:recipients==='rural'?26:recipients==='selected'?6:34;
+  const citySchools=SCHOOLS.filter(s=>/^г\./i.test(s.locality||''));const ruralSchools=SCHOOLS.filter(s=>!/^г\./i.test(s.locality||''));const total=recipients==='city'?citySchools.length:recipients==='rural'?ruralSchools.length:recipients==='selected'?Math.min(1,SCHOOLS.length):SCHOOLS.length;
   const routes = {auto:'Автоматически по должности',deputy:'Через заместителя начальника',chief:'Только начальником РОО',none:'Без дополнительного согласования'};
   const task = {
     id:Math.max(0,...state.tasks.map(t=>t.id))+1,
@@ -855,7 +827,7 @@ function createTaskFromForm(event) {
   saveState();
   closeModal('taskModal');
   event.target.reset();
-  dom.newTaskDate.value='2026-07-24';
+  dom.newTaskDate.value=new Date(Date.now()+3*86400000).toISOString().slice(0,10);
   dom.newTaskTime.value='14:00';
   state.formFields=['Количество обучающихся','Основной показатель','Комментарий','Подтверждающий файл'];
   renderAll();
@@ -873,14 +845,17 @@ function downloadCSV(filename, rows) {
 }
 
 function downloadTaskSummary(task) {
-  const rows = [['Школа','Статус','Срок','Рейтинг'],...SCHOOLS.map((s,i)=>[s.name,i<task.completed?'Выполнено':task.status==='overdue'?'Просрочено':'В работе',task.deadline,s.rating])];
+  const recipients=Array.isArray(task._recipients)?task._recipients:[];
+  const bySchool=new Map(recipients.map(r=>[r.school_id,r]));
+  const schools=recipients.length?SCHOOLS.filter(s=>bySchool.has(s.id)):getVisibleSchools();
+  const rows=[['Школа','Статус','Срок','Рейтинг'],...schools.map(s=>{const r=bySchool.get(s.id);return [s.name,r?({new:'Новое',working:'В работе',director:'У директора',review:'На проверке',returned:'На исправлении',accepted:'Принято',overdue:'Просрочено'}[r.status]||r.status):'Нет статуса',task.deadline||'',Number.isFinite(Number(s.rating))?s.rating:''];})];
   downloadCSV(`svod_poruchenie_${task.id}.csv`,rows);
   addAudit('Экспортировал свод по поручению',task.title,'task');
   showToast('Свод по поручению скачан');
 }
 
 function downloadSchoolCard(school) {
-  downloadCSV(`kartochka_shkoly_${school.place}.csv`,[['Показатель','Значение'],['Школа',school.name],['Директор',school.director],['Рейтинг',school.rating],['Место',school.place],['Поручений',school.tasks],['Просрочено',school.overdue],['Возвраты',school.returned]]);
+  downloadCSV(`kartochka_shkoly_${school.place}.csv`,[['Показатель','Значение'],['Школа',school.name],['Директор',school.director],['Рейтинг',Number.isFinite(Number(school.rating))?school.rating:'Не рассчитан'],['Место',school.place||'Не присвоено'],['Поручений',school.tasks],['Просрочено',school.overdue],['Возвраты',school.returned]]);
   showToast('Карточка школы скачана');
 }
 
@@ -889,18 +864,20 @@ function downloadReport(type) {
   if (type==='overdue') {
     downloadCSV('prosrochennye_porucheniya.csv',[['Поручение','Отдел','Срок','Выполнено','Всего'],...state.tasks.filter(t=>t.status==='overdue').map(t=>[t.title,t.direction,t.deadline,t.completed,t.total])]);
   } else if (type==='departments') {
-    downloadCSV('rabota_otdelov.csv',[['Отдел','Сотрудников','Активных поручений','Просрочек','Исполнение'],...DEPARTMENTS.map(d=>[d.name,d.staff,d.active,d.overdue,`${d.completion}%`])]);
+    downloadCSV('rabota_otdelov.csv',[['Отдел','Сотрудников','Активных поручений','Просрочек','Исполнение'],...DEPARTMENTS.map(d=>[d.name,d.staff||0,d.active||0,d.overdue||0,Number.isFinite(Number(d.completion))?`${d.completion}%`:'Не рассчитано'])]);
   } else {
-    downloadCSV(`otchet_${type}.csv`,[['Раздел','Значение'],['Тип отчёта',type],['Дата формирования','21.07.2026'],['Доступная роль',roleConfig().label],['Количество поручений',getVisibleTasks().length],['Количество школ',getVisibleSchools().length]]);
+    downloadCSV(`otchet_${type}.csv`,[['Раздел','Значение'],['Тип отчёта',type],['Дата формирования',new Date().toLocaleDateString('ru-RU')],['Доступная роль',roleConfig().label],['Количество поручений',getVisibleTasks().length],['Количество школ',getVisibleSchools().length]]);
   }
   addAudit('Сформировал отчёт',type,'submission');
   showToast('Отчёт сформирован и скачан');
 }
 
 function exportRating() {
-  const schools = getRatingSchools();
-  downloadCSV('reiting_shkol_iyul_2026.csv',[['Место','Школа','Назначено','Вовремя','Просрочено','Возвраты','Качество','Рейтинг'],...schools.map(s=>[s.place,s.name,s.tasks,s.onTime,s.overdue,s.returned,s.quality,ratingValue(s)])]);
-  addAudit('Экспортировал рейтинг школ','Июль 2026','rating');
+  const schools=getRatingSchools().filter(s=>Number.isFinite(Number(s.rating)));
+  if(!schools.length)return showToast('Рейтинг ещё не рассчитан');
+  const period=new Date().toLocaleDateString('ru-RU',{month:'long',year:'numeric'}).replace(/\s+/g,'_');
+  downloadCSV(`reiting_shkol_${period}.csv`,[['Место','Школа','Назначено','Вовремя','Просрочено','Возвраты','Качество','Рейтинг'],...schools.map(s=>[s.place||'',s.name,s.tasks||0,s.onTime||0,s.overdue||0,s.returned||0,s.quality??'',s.rating])]);
+  addAudit('Экспортировал рейтинг школ',period,'rating');
   showToast('Рейтинг школ скачан');
 }
 
@@ -913,7 +890,7 @@ function generateCustomReport() {
   const type = dom.reportType.value;
   const period = dom.reportPeriod.value;
   const format = dom.reportFormat.value;
-  downloadCSV('avtomaticheskaya_svodka.csv',[['Автоматическая сводка'],['Тип',type],['Период',period],['Формат',format],['Поручений',getVisibleTasks().length],['Школ',getVisibleSchools().length],['Сформировано','21 июля 2026']]);
+  downloadCSV('avtomaticheskaya_svodka.csv',[['Автоматическая сводка'],['Тип',type],['Период',period],['Формат',format],['Поручений',getVisibleTasks().length],['Школ',getVisibleSchools().length],['Сформировано',new Date().toLocaleString('ru-RU')]]);
   addAudit('Сформировал автоматическую сводку',`${type} · ${period}`,'submission');
   showToast('Автоматическая сводка сформирована');
 }
@@ -1010,10 +987,8 @@ function bindStaticEvents() {
   document.getElementById('ratingRulesButton').addEventListener('click',()=>showInfoModal('Правила рейтинга','<ul><li><b>40% — соблюдение сроков:</b> выполнено вовремя, просрочка и длительность задержки.</li><li><b>30% — качество:</b> принятие с первого раза и количество возвратов.</li><li><b>20% — полнота:</b> заполнение обязательных полей и наличие файлов.</li><li><b>10% — скорость реакции:</b> время открытия и принятия поручения в работу.</li></ul><p>Важные поручения получают коэффициент ×1,25, срочные ×1,5, критические ×2.</p>','Исполнительская дисциплина'));
 
   document.getElementById('archiveSearchButton').addEventListener('click',()=>{ const q=dom.archiveSearch.value.trim();dom.archiveSearchResult.innerHTML=q?`Найдено 6 документов по запросу <b>${escapeHTML(q)}</b>. В рабочей версии здесь откроется список файлов и версий.`:'Введите название документа или школы.'; });
-  document.getElementById('downloadArchiveButton').addEventListener('click',()=>downloadCSV('perechen_arhiva.csv',[['Учебный год','Поручений','Документов'],['2025–2026',684,1928],['2024–2025',731,2107],['2023–2024',598,1756]]));
+  document.getElementById('downloadArchiveButton').addEventListener('click',()=>{const grouped={};getVisibleTasks().forEach(t=>{const d=new Date(t.deadlineDate||t.createdAt||Date.now());const y=d.getMonth()>=7?`${d.getFullYear()}–${d.getFullYear()+1}`:`${d.getFullYear()-1}–${d.getFullYear()}`;grouped[y]=(grouped[y]||0)+1;});const rows=Object.entries(grouped).sort((a,b)=>b[0].localeCompare(a[0])).map(([year,count])=>[year,count,'']);downloadCSV('perechen_arhiva.csv',[['Учебный год','Поручений','Документов'],...rows]);});
   document.getElementById('addEventButton').addEventListener('click',()=>showToast('В рабочей версии откроется форма события и напоминаний'));
-  document.getElementById('calendarPrev').addEventListener('click',()=>showToast('Календарь: июнь 2026'));
-  document.getElementById('calendarNext').addEventListener('click',()=>showToast('Календарь: август 2026'));
 
   dom.closeTaskDrawer = document.getElementById('closeTaskDrawer');
   dom.closeTaskDrawer.addEventListener('click',closeTaskDrawer);

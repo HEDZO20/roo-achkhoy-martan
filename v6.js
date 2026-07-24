@@ -207,7 +207,10 @@
     if(record.hidden)styles.display='none';
     const body=Object.entries(styles).filter(([,v])=>v!==''&&v!=null).map(([p,v])=>`${p}:${v}!important`).join(';');
     if(!body)return '';
-    const selector=`[data-v6-key="${cssAttrEscape(key)}"]`;
+    const escapedKey=cssAttrEscape(key);
+    const selector=key.startsWith('id:')
+      ? `#${CSS.escape(key.slice(3))}[data-v6-key="${escapedKey}"]`
+      : `html body [data-v6-key="${escapedKey}"][data-v6-key="${escapedKey}"][data-v6-key="${escapedKey}"]`;
     const cascadeProps=['color','font-family','font-weight','letter-spacing','line-height','text-align'];
     const cascadeBody=Object.entries(styles).filter(([p,v])=>cascadeProps.includes(p)&&v!==''&&v!=null).map(([p,v])=>`${p}:${v}!important`).join(';');
     return `${selector}{${body}}${record.cascade&&cascadeBody?`${selector} *{${cascadeBody}}`:''}`;
@@ -558,7 +561,7 @@
 
   function updateVersionText(){
     const version=$('versionButton');if(version)version.textContent='V11';
-    const banner=$('systemUpdateBanner');if(banner){const strong=banner.querySelector('strong'),small=banner.querySelector('small');if(strong)strong.textContent='Система обновлена до ONLINE V11';if(small)small.textContent='Выбранные блоки получили постоянные ключи; изменения сохраняются автоматически в браузере и Supabase.';}
+    const banner=$('systemUpdateBanner');if(banner){const strong=banner.querySelector('strong'),small=banner.querySelector('small');if(strong)strong.textContent='Система обновлена до ONLINE V22';if(small)small.textContent='Проведён полный аудит показателей, интерфейса и сохранения дизайна.';}
   }
 
   window.ROODesignEditor={

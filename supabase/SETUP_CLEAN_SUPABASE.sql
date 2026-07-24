@@ -1,5 +1,5 @@
 -- ============================================================
--- Отдел Образования Ачхой-Мартановского Района — ONLINE V10 — ЧИСТАЯ УСТАНОВКА
+-- Отдел Образования Ачхой-Мартановского Района — ONLINE V22 — ЧИСТАЯ УСТАНОВКА
 -- Выполнить целиком в Supabase Dashboard -> SQL Editor -> New query
 -- Скрипт можно запускать повторно: он старается не дублировать данные.
 -- ============================================================
@@ -27,7 +27,7 @@ create table if not exists public.schools (
   director_name text,
   responsible_name text,
   email text,
-  rating numeric(5,2) not null default 100,
+  rating numeric(5,2),
   active boolean not null default true,
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
@@ -401,28 +401,36 @@ end $$;
 
 -- ---------- Рейтинг отделов ----------
 create or replace view public.department_performance with (security_invoker=true) as
-select
-  d.id,
-  d.name,
-  d.email,
-  d.head_name,
-  count(distinct t.id) as tasks_given,
-  count(distinct t.id) filter (where t.status='done') as completed,
-  count(distinct t.id) filter (where t.status='overdue') as overdue,
-  count(s.id) filter (where s.status='review') as waiting_review,
-  count(s.id) as responses,
-  round(
-    greatest(0, least(100,
-      100
-      - count(t.id) filter (where t.status='overdue') * 5
-      - count(s.id) filter (where s.status='review') * 0.5
-      - count(s.id) filter (where s.status='returned') * 1.5
-    ))::numeric, 1
-  ) as rating
+with task_stats as (
+  select department_id,
+    count(*) as tasks_given,
+    count(*) filter (where status='done') as completed,
+    count(*) filter (where status='overdue') as overdue
+  from public.tasks where status <> 'draft' group by department_id
+), submission_stats as (
+  select t.department_id,
+    count(s.id) as responses,
+    count(s.id) filter (where s.status='review') as waiting_review,
+    count(s.id) filter (where s.status='returned') as returned_count,
+    avg(extract(epoch from (s.updated_at-s.submitted_at))/3600.0)
+      filter (where s.submitted_at is not null and s.status in ('accepted','returned')) as avg_review_hours
+  from public.tasks t join public.submissions s on s.task_id=t.id group by t.department_id
+)
+select d.id,d.name,d.email,d.head_name,
+  coalesce(ts.tasks_given,0) as tasks_given,
+  coalesce(ts.completed,0) as completed,
+  coalesce(ts.overdue,0) as overdue,
+  coalesce(ss.waiting_review,0) as waiting_review,
+  coalesce(ss.responses,0) as responses,
+  case when ss.avg_review_hours is null then null else round(ss.avg_review_hours::numeric,1) end as avg_review_hours,
+  case when coalesce(ts.completed,0)+coalesce(ts.overdue,0)+coalesce(ss.responses,0)=0 then null
+    else round(greatest(0,least(100,
+      100-coalesce(ts.overdue,0)*8-coalesce(ss.waiting_review,0)*2-coalesce(ss.returned_count,0)*2-greatest(coalesce(ss.avg_review_hours,0)-24,0)*0.5
+    ))::numeric,1)
+  end as rating
 from public.departments d
-left join public.tasks t on t.department_id=d.id
-left join public.submissions s on s.task_id=t.id
-group by d.id,d.name,d.email,d.head_name;
+left join task_stats ts on ts.department_id=d.id
+left join submission_stats ss on ss.department_id=d.id;
 
 create or replace view public.exam_school_summary with (security_invoker=true) as
 select
@@ -697,7 +705,7 @@ on conflict(email) do update set role=excluded.role,department_id=excluded.depar
 commit;
 
 -- После успешного выполнения:
--- 1) Откройте сайт ONLINE V10 — ЧИСТАЯ УСТАНОВКА.
+-- 1) Откройте сайт ONLINE V22 — ЧИСТАЯ УСТАНОВКА.
 -- 2) Нажмите «Первый вход / создать пароль» и зарегистрируйте СВОЮ почту первой.
 -- 3) Первый неизвестный аккаунт станет Начальником РОО.
 -- 4) После этого начальники отделов регистрируются по пяти заранее разрешённым почтам.

@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#e8f0e3" />
-  <meta name="description" content="Рабочая система управления поручениями Отдела Образования Ачхой-Мартановского Района" />
-  <title>Отдел Образования Ачхой-Мартановского Района</title>
+  <meta name="description" content="Рабочая информационная система Отдела образования Ачхой-Мартановского района" />
+  <title>Отдел образования Ачхой-Мартановского района</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="v3.css" />
@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="v5.css" />
   <link rel="stylesheet" href="v7.css" />
   <link rel="stylesheet" href="v6.css" />
+  <link rel="stylesheet" href="v22.css" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -25,17 +26,17 @@
       <div class="login-intro">
         <div class="brand-mark brand-mark-xl">ОО</div>
         <span class="eyebrow">Единая цифровая система управления</span>
-        <h1>Отдел Образования<br /><span>Ачхой-Мартановского Района</span></h1>
+        <h1>Отдел образования<br /><span>Ачхой-Мартановского района</span></h1>
         <p>Поручения, автоматические сводки, согласования, контроль сроков, рейтинг школ и аналитика — в одном защищённом пространстве.</p>
         <div class="feature-row">
-          <div class="feature-chip"><b>34</b><span>школы района</span></div>
-          <div class="feature-chip"><b>24/7</b><span>контроль исполнения</span></div>
-          <div class="feature-chip"><b>7</b><span>уровней доступа</span></div>
+          <div class="feature-chip"><b>Единая</b><span>база школ и поручений</span></div>
+          <div class="feature-chip"><b>Онлайн</b><span>контроль исполнения</span></div>
+          <div class="feature-chip"><b>Роли</b><span>разграничение доступа</span></div>
         </div>
         <div class="login-capabilities">
-          <span>✓ Автоматические напоминания</span>
+          <span>✓ Поручения и контроль сроков</span>
           <span>✓ Журнал всех действий</span>
-          <span>✓ Своды Excel и PDF</span>
+          <span>✓ Анализ Excel и CSV</span>
           <span>✓ Работа с телефона</span>
         </div>
       </div>
@@ -43,13 +44,13 @@
       <div class="login-card glass-card">
         <div class="login-card-head">
           <span class="status-dot"></span>
-          <span>ONLINE V21 · GitHub Pages + Supabase</span>
+          <span>ONLINE V22.1 · GitHub Pages + Supabase</span>
         </div>
         <h2>Вход в систему</h2>
-        <p class="muted">Выберите должность, чтобы проверить реальные различия в правах.</p>
+        <p class="muted">Введите рабочую почту и пароль. Права назначаются администратором системы.</p>
         <form id="loginForm">
-          <label id="demoRoleLoginLabel" for="roleSelect">Демонстрационная роль</label>
-          <select id="roleSelect" class="large-select">
+          <label id="demoRoleLoginLabel" class="hidden" for="roleSelect">Роль</label>
+          <select id="roleSelect" class="large-select hidden" aria-hidden="true">
             <option value="chief">Начальник РОО</option>
             <option value="deputy">Заместитель начальника РОО</option>
             <option value="department_head">Начальник отдела</option>
@@ -59,22 +60,19 @@
             <option value="observer">Наблюдатель руководства</option>
           </select>
           <label>Электронная почта</label>
-          <input id="emailInput" type="email" value="chief@achkhoy-edu.ru" required />
+          <input id="emailInput" type="email" value="" placeholder="name@example.ru" required />
           <label>Пароль</label>
           <div class="password-wrap">
-            <input id="passwordInput" type="password" value="123456" required />
+            <input id="passwordInput" type="password" value="" placeholder="Введите пароль" required />
             <button type="button" id="togglePassword" class="icon-button" aria-label="Показать пароль">◉</button>
           </div>
-          <div class="login-options">
+          <div class="login-options hidden">
             <label class="checkbox-line"><input type="checkbox" checked /> Запомнить роль</label>
-            <button type="button" class="text-button" id="resetDemoFromLogin">Сбросить демо-данные</button>
+            <button type="button" class="text-button hidden" id="resetDemoFromLogin">Сбросить данные</button>
           </div>
           <button class="primary-button full" type="submit">Войти в систему <span>→</span></button>
         </form>
-        <div class="demo-note">
-          <strong>Пароль для всех ролей: 123456</strong>
-          <span>В демо-режиме проверка почты отключена — просто выберите роль.</span>
-        </div>
+        <div class="demo-note hidden" aria-hidden="true"></div>
       </div>
     </div>
   </section>
@@ -84,7 +82,7 @@
       <div class="sidebar-brand v5-brand">
         <img class="v5-emblem" src="assets/emblem.svg" alt="Эмблема отдела образования" />
         <div class="v5-brand-text">
-          <strong>Отдел Образования</strong>
+          <strong>Отдел образования</strong>
           <span>Ачхой-Мартановского района</span>
         </div>
       </div>
@@ -98,7 +96,7 @@
       <nav class="sidebar-nav v5-nav" id="sidebarNav">
         <div class="nav-section-label">Управление</div>
         <button class="nav-item active" data-page="dashboard"><span class="nav-icon">⌂</span><span>1. Главная</span></button>
-        <button class="nav-item" data-page="tasks"><span class="nav-icon">▣</span><span>2. Поручения</span><b class="nav-badge" id="taskNavBadge">12</b></button>
+        <button class="nav-item" data-page="tasks"><span class="nav-icon">▣</span><span>2. Поручения</span><b class="nav-badge hidden" id="taskNavBadge">0</b></button>
         <button class="nav-item" data-page="schools"><span class="nav-icon">▦</span><span>3. Школы</span></button>
         <button class="nav-item" data-page="rating"><span class="nav-icon">▥</span><span>4. Рейтинг</span></button>
 
@@ -106,10 +104,10 @@
         <button class="nav-item" data-page="reports"><span class="nav-icon">▤</span><span>5. Отчёты</span></button>
         <button class="nav-item" data-page="calendar"><span class="nav-icon">□</span><span>6. Календарь</span></button>
         <button class="nav-item" data-page="documents"><span class="nav-icon">▧</span><span>7. Документы</span></button>
-        <button class="nav-item" data-page="appeals"><span class="nav-icon">✉</span><span>8. Обращения</span><b class="nav-badge warning">4</b></button>
+        <button class="nav-item" data-page="appeals"><span class="nav-icon">✉</span><span>8. Обращения</span><b class="nav-badge warning hidden">0</b></button>
 
         <div class="nav-section-label">Контроль и аналитика</div>
-        <button class="nav-item" data-page="exams"><span class="nav-icon">◫</span><span>9. Анализ экзаменов</span><b class="nav-badge v7-new-badge">NEW</b></button>
+        <button class="nav-item" data-page="exams"><span class="nav-icon">Σ</span><span>9. Анализ экзаменов</span></button>
         <button class="nav-item" data-page="department_control"><span class="nav-icon">▦</span><span>10. Работа отделов</span></button>
         <button class="nav-item" data-page="meetings"><span class="nav-icon">♙</span><span>11. Совещания</span></button>
         <button class="nav-item" data-page="inspections"><span class="nav-icon">◇</span><span>12. Проверки</span></button>
@@ -131,7 +129,7 @@
       <div class="sidebar-bottom v5-sidebar-bottom">
         <div class="support-card v5-support-card">
           <div class="support-icon">◉</div>
-          <div><strong>Техническая поддержка</strong><span>8 (8714) 22-33-44</span><small>Будни 9:00–18:00</small></div>
+          <div><strong>Администратор системы</strong><span>Контакты назначаются РОО</span><small>Поддержка пользователей</small></div>
           <button id="helpButton">Инструкция</button>
         </div>
         <button id="logoutButton" class="logout-button"><span>↪</span> Выйти</button>
@@ -151,12 +149,13 @@
             <input id="globalSearch" type="search" placeholder="Поиск по системе..." />
           </div>
           <button class="command-button v5-command" id="commandButton" title="Быстрый поиск и команды"><span>⌕</span><kbd>Ctrl K</kbd></button>
-          <button class="round-button update-indicator v5-utility" id="versionButton" title="Версия системы">V12</button>
+          <button class="round-button update-indicator v5-utility" id="versionButton" title="Версия системы">V22.1</button>
           <button class="round-button v5-utility" id="themeButton" title="Переключить тему">◐</button>
           <button class="round-button notification-button v5-notification" id="notificationButton" title="Уведомления">♢<b id="notificationCount">4</b></button>
+          <button id="visualEditorFab" class="v6-editor-fab hidden" title="Открыть визуальный редактор"><span>✦</span><b>Дизайн</b></button>
           <button class="user-card v5-user-card" id="userCardButton">
             <div class="avatar" id="userAvatar">МА</div>
-            <div><strong id="userName">Магомед А.</strong><span id="userRole">Начальник РОО</span></div>
+            <div><strong id="userName">Пользователь</strong><span id="userRole">Роль загружается</span></div>
             <span>⌄</span>
           </button>
         </div>
@@ -171,10 +170,10 @@
       <aside class="floating-panel profile-panel hidden" id="profilePanel">
         <div class="profile-summary">
           <div class="avatar large" id="profileAvatar">МА</div>
-          <div><strong id="profileName">Магомед А.</strong><span id="profilePosition">Начальник РОО</span></div>
+          <div><strong id="profileName">Пользователь</strong><span id="profilePosition">Роль загружается</span></div>
         </div>
-        <label id="demoRoleProfileLabel" for="quickRoleSwitcher">Переключить демо-роль</label>
-        <select id="quickRoleSwitcher">
+        <label id="demoRoleProfileLabel" class="hidden" for="quickRoleSwitcher">Роль пользователя</label>
+        <select id="quickRoleSwitcher" class="hidden" aria-hidden="true">
           <option value="chief">Начальник РОО</option>
           <option value="deputy">Заместитель начальника РОО</option>
           <option value="department_head">Начальник отдела</option>
@@ -185,7 +184,7 @@
         </select>
         <div class="profile-actions">
           <button id="profilePermissionsButton">Мои права</button>
-          <button id="resetDemoButton">Сбросить демо</button>
+          <button id="resetDemoButton" class="hidden">Сбросить данные</button>
         </div>
       </aside>
 
@@ -195,7 +194,7 @@
             <article class="v5-welcome-card">
               <div class="v5-welcome-icon">●</div>
               <div>
-                <span class="eyebrow" id="todayLabel">Среда, 22 июля 2026</span>
+                <span class="eyebrow" id="todayLabel">Текущая дата</span>
                 <p class="v5-welcome-kicker">Добро пожаловать,</p>
                 <h1 id="welcomeTitle">Начальник РОО!</h1>
                 <p id="welcomeText">Здесь вы можете контролировать исполнение поручений, анализировать показатели и управлять образовательной деятельностью района.</p>
@@ -224,7 +223,7 @@
 
             <article class="panel v5-recent-panel">
               <div class="panel-head"><div><span class="eyebrow">Работа</span><h3>Последние поручения</h3></div><button class="text-button" data-page-jump="tasks">Все поручения →</button></div>
-              <div class="responsive-table"><table><thead><tr><th>Поручение</th><th>Статус</th><th>Срок</th><th>Ответственный</th></tr></thead><tbody id="v5RecentTasks"></tbody></table></div>
+              <div class="responsive-table"><table class="v5-recent-table"><thead><tr><th>Поручение</th><th>Статус и срок</th></tr></thead><tbody id="v5RecentTasks"></tbody></table></div>
             </article>
 
             <article class="panel v5-rating-panel">
@@ -342,7 +341,7 @@
           </div>
           <div class="panel table-panel">
             <div class="panel-head rating-filter-head">
-              <div class="rating-tabs" id="ratingTabs"><button class="active" data-period="july">Июль 2026</button><button data-period="june">Июнь 2026</button><button data-period="year">Учебный год</button></div>
+              <div class="rating-tabs" id="ratingTabs"><button class="active" data-period="july">Текущий период</button><button data-period="june">Предыдущий период</button><button data-period="year">Учебный год</button></div>
               <div class="table-tools"><input id="ratingSearch" type="search" placeholder="Найти школу" /><select id="ratingDirection"><option value="all">Все направления</option></select></div>
             </div>
             <div class="responsive-table">
@@ -446,7 +445,7 @@
 
         <section class="page" id="page-situation">
           <div class="page-heading-row"><div><span class="eyebrow">Режим руководителя</span><h1>Ситуационный центр</h1><p>Критические риски, исполнение поручений, нагрузка отделов и школы, требующие вмешательства.</p></div><button class="primary-button" id="presentationModeButton">▣ Режим большого экрана</button></div>
-          <div class="situation-hero panel"><div><span class="live-pill"><i></i> Данные обновлены сейчас</span><h2>Исполнительская дисциплина района — <b>88,4%</b></h2><p>За последние 7 дней показатель вырос на 4,2%. Пять школ требуют внимания руководства.</p></div><div class="situation-clock" id="situationClock">19:00</div></div>
+          <div class="situation-hero panel"><div><span class="live-pill"><i></i> Данные из рабочей базы</span><h2>Исполнительская дисциплина — <b>не рассчитана</b></h2><p>Показатели появятся после создания поручений и получения ответов школ.</p></div><div class="situation-clock" id="situationClock">—</div></div>
           <div class="situation-stats" id="situationStats"></div>
           <div class="dashboard-grid situation-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">Приоритеты</span><h3>Требуют решения сегодня</h3></div><span class="tag red">5 рисков</span></div><div id="situationRisks" class="risk-feed"></div></article><article class="panel"><div class="panel-head"><div><span class="eyebrow">Подразделения</span><h3>Эффективность отделов</h3></div></div><div id="situationDepartments" class="department-score-list"></div></article></div>
           <article class="panel"><div class="panel-head"><div><span class="eyebrow">Динамика</span><h3>Исполнение за последние 14 дней</h3></div><div class="legend"><span><i class="legend-blue"></i> вовремя</span><span><i class="legend-red"></i> просрочено</span></div></div><div class="trend-columns" id="situationTrend"></div></article>
@@ -511,17 +510,17 @@
 
         <section class="page" id="page-personal">
           <div class="page-heading-row"><div><span class="eyebrow">Персональное рабочее пространство</span><h1>Мои задачи</h1><p>Все поручения, согласования, проверки, обращения и личные напоминания в одном списке.</p></div><button class="primary-button" id="addPersonalTaskButton">+ Личная задача</button></div>
-          <div class="personal-summary" id="personalSummary"></div><div class="dashboard-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">Сегодня</span><h3>Приоритетные задачи</h3></div><select id="personalTaskFilter"><option value="all">Все</option><option value="open">Невыполненные</option><option value="done">Выполненные</option></select></div><div id="personalTaskList" class="personal-task-list"></div></article><article class="panel"><div class="panel-head"><div><span class="eyebrow">Замещение</span><h3>Передача дел</h3></div><span class="tag blue">Настраивается</span></div><div class="delegation-form"><label>Замещающий сотрудник<select id="delegationUser"></select></label><div class="date-pair"><label>С даты<input id="delegationFrom" type="date" value="2026-07-22" /></label><label>По дату<input id="delegationTo" type="date" value="2026-08-05" /></label></div><label class="checkbox-line"><input id="delegationTasks" type="checkbox" checked /> Передать активные поручения</label><label class="checkbox-line"><input id="delegationApprovals" type="checkbox" checked /> Передать согласования</label><button class="secondary-button full" id="saveDelegationButton">Сохранить замещение</button><div id="delegationStatus" class="delegation-status"></div></div></article></div>
+          <div class="personal-summary" id="personalSummary"></div><div class="dashboard-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">Сегодня</span><h3>Приоритетные задачи</h3></div><select id="personalTaskFilter"><option value="all">Все</option><option value="open">Невыполненные</option><option value="done">Выполненные</option></select></div><div id="personalTaskList" class="personal-task-list"></div></article><article class="panel"><div class="panel-head"><div><span class="eyebrow">Замещение</span><h3>Передача дел</h3></div><span class="tag blue">Настраивается</span></div><div class="delegation-form"><label>Замещающий сотрудник<select id="delegationUser"></select></label><div class="date-pair"><label>С даты<input id="delegationFrom" type="date" /></label><label>По дату<input id="delegationTo" type="date" /></label></div><label class="checkbox-line"><input id="delegationTasks" type="checkbox" checked /> Передать активные поручения</label><label class="checkbox-line"><input id="delegationApprovals" type="checkbox" checked /> Передать согласования</label><button class="secondary-button full" id="saveDelegationButton">Сохранить замещение</button><div id="delegationStatus" class="delegation-status"></div></div></article></div>
         </section>
         <section class="page" id="page-calendar">
           <div class="page-heading-row"><div><span class="eyebrow">Планирование</span><h1>Календарь</h1><p>Сроки поручений, регулярные отчёты, совещания и контрольные даты.</p></div><button class="primary-button" id="addEventButton">+ Добавить событие</button></div>
           <div class="calendar-layout">
             <article class="panel calendar-card">
-              <div class="calendar-head"><button id="calendarPrev">‹</button><h3 id="calendarMonthTitle">Июль 2026</h3><button id="calendarNext">›</button></div>
+              <div class="calendar-head"><button id="calendarPrev">‹</button><h3 id="calendarMonthTitle">Текущий месяц</h3><button id="calendarNext">›</button></div>
               <div class="calendar-week"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
               <div class="calendar-days" id="calendarDays"></div>
             </article>
-            <article class="panel calendar-agenda"><div class="panel-head"><div><span class="eyebrow" id="agendaDate">21 июля</span><h3>События дня</h3></div></div><div id="agendaList"></div></article>
+            <article class="panel calendar-agenda"><div class="panel-head"><div><span class="eyebrow" id="agendaDate">Выберите дату</span><h3>События дня</h3></div></div><div id="agendaList"></div></article>
           </div>
         </section>
 
@@ -561,10 +560,10 @@
           <label class="full-field">Название поручения<input id="newTaskTitle" required maxlength="120" placeholder="Например: Свод по результатам ГИА" /></label>
           <label>Ответственный отдел<select id="newTaskDirection" required></select></label>
           <label>Приоритет<select id="newTaskPriority"><option>Обычное</option><option>Важное</option><option>Срочное</option><option>Критическое</option></select></label>
-          <label>Дата окончания<input id="newTaskDate" type="date" value="2026-07-24" required /></label>
+          <label>Дата окончания<input id="newTaskDate" type="date" required /></label>
           <label>Время<input id="newTaskTime" type="time" value="14:00" required /></label>
           <label class="full-field">Описание<textarea id="newTaskDescription" rows="4" placeholder="Что необходимо выполнить, какие показатели заполнить и какие документы приложить"></textarea></label>
-          <label>Получатели<select id="newTaskRecipients"><option value="all">Все школы района (34)</option><option value="city">Городские школы</option><option value="rural">Сельские школы</option><option value="selected">Выбрать школы вручную</option></select></label>
+          <label>Получатели<select id="newTaskRecipients"><option value="all">Все школы района</option><option value="city">Городские школы</option><option value="rural">Сельские школы</option><option value="selected">Выбрать школы вручную</option></select></label>
           <label>Формат ответа<select id="newTaskResponseType"><option>Форма + файлы</option><option>Только структурированная форма</option><option>Загрузка Excel / Word / PDF</option><option>Фотоотчёт</option><option>Да / Нет + комментарий</option></select></label>
           <label>Подтверждение директора<select id="newTaskDirectorApproval"><option value="yes">Обязательно</option><option value="no">Не требуется</option></select></label>
           <label>Повторение<select id="newTaskRepeat"><option>Не повторять</option><option>Еженедельно</option><option>Ежемесячно</option><option>Ежеквартально</option></select></label>
@@ -677,13 +676,12 @@
   </div>
 
   <div class="modal-backdrop hidden" id="commandModal">
-    <div class="command-palette glass-card"><div class="command-input-row"><span>⌕</span><input id="commandSearchInput" placeholder="Введите команду, название раздела, школы или поручения" /><kbd>ESC</kbd></div><div class="command-hint">Быстрые команды: «просроченные», «новое поручение», «рейтинг», «СОШ №1», «проверки»</div><div id="commandResults" class="command-results"></div></div>
+    <div class="command-palette glass-card"><div class="command-input-row"><span>⌕</span><input id="commandSearchInput" placeholder="Введите команду, название раздела, школы или поручения" /><kbd>ESC</kbd></div><div class="command-hint">Быстрые команды: «просроченные», «новое поручение», «рейтинг», название школы, «проверки»</div><div id="commandResults" class="command-results"></div></div>
   </div>
   <div class="system-update-banner" id="systemUpdateBanner"><div><span class="update-pulse"></span><strong>Система обновлена до V7</strong><small>Добавлены анализ ЕГЭ, ОГЭ и ГИА, пофамильные результаты, графики и контроль активности отделов РОО.</small></div><button id="dismissUpdateButton">Понятно</button></div>
   <button class="presentation-exit hidden" id="presentationExitButton">Выйти из режима экрана</button>
   <div class="toast" id="toast"></div>
 
-  <button id="visualEditorFab" class="v6-editor-fab hidden" title="Открыть визуальный редактор"><span>✦</span><b>Дизайн</b></button>
 
   <aside id="visualEditorPanel" class="v6-editor-panel hidden" aria-label="Визуальный редактор сайта">
     <div class="v6-editor-head">
@@ -807,5 +805,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="online.js"></script>
+  <script src="v22.js"></script>
 </body>
 </html>
