@@ -319,11 +319,11 @@
     onlineReady=false;
     const login=document.getElementById('loginScreen'); const app=document.getElementById('app');
     app?.classList.add('hidden'); login?.classList.remove('hidden');
-    setLoginState('База ещё не подготовлена. Выполните файл supabase/SETUP_SUPABASE.sql в SQL Editor.', 'warning');
+    setLoginState('База ещё не подготовлена. Выполните файл supabase/SETUP_CLEAN_SUPABASE.sql в SQL Editor.', 'warning');
     const form=document.getElementById('loginForm');
     if(form && !document.getElementById('rooSetupHelp')){
       const panel=document.createElement('div');panel.id='rooSetupHelp';panel.className='roo-setup-panel';
-      panel.innerHTML='<b>Остался один обязательный шаг</b><br>Supabase → SQL Editor → New query → вставить содержимое файла:<code>supabase/SETUP_SUPABASE.sql</code>Нажать <b>Run</b>, затем вернуться на сайт и обновить страницу.'+(details?`<small>${details}</small>`:'');
+      panel.innerHTML='<b>Остался один обязательный шаг</b><br>Supabase → SQL Editor → New query → вставить содержимое файла:<code>supabase/SETUP_CLEAN_SUPABASE.sql</code>Нажать <b>Run</b>, затем вернуться на сайт и обновить страницу.'+(details?`<small>${details}</small>`:'');
       form.appendChild(panel);
     }
   }

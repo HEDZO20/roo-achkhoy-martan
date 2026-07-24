@@ -7,9 +7,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Local deployment metadata
-.vercel/
-
 # Never commit secrets if added later
 .env
 .env.*
@@ -17,6 +14,9 @@ Thumbs.db
 *service_role*
 *sb_secret_*
 
-# Archives/build leftovers
+# Local build and archives
+_site/
 *.zip
 _BACKUP/
+SITE_URL.txt
+ПОСЛЕДНИЙ_ШАГ_SUPABASE.txt

@@ -1,9 +1,10 @@
 {
   "name": "Отдел Образования Ачхой-Мартановского Района",
   "short_name": "РОО Ачхой-Мартан",
-  "start_url": "./index.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#edf2e8",
   "theme_color": "#23663b",
-  "lang": "ru"
+  "lang": "ru",
+  "scope": "./"
 }

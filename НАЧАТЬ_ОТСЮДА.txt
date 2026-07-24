@@ -1,0 +1,19 @@
+ONLINE V19 — исправление Git Credential Manager
+
+1. Закрой старое окно V18.
+2. Запусти: 1_UPDATE_GITHUB_FIXED.bat
+3. Если GitHub откроет браузер — подтверди аккаунт HEDZO20.
+4. Скрипт сам создаст резервную ветку, обновит репозиторий и проверит GitHub Pages.
+
+Исправлено:
+- удалён прямой вызов `git credential-manager configure`;
+- обычные сообщения Credential Manager больше не считаются ошибкой;
+- не нужен winget;
+- не нужен GitHub CLI;
+- предупреждение PowerShell для скачанного файла снимается автоматически.
+
+Репозиторий:
+https://github.com/HEDZO20/roo-achkhoy-martan
+
+Ожидаемый сайт:
+https://hedzo20.github.io/roo-achkhoy-martan/
