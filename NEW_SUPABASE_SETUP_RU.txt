@@ -1,0 +1,16 @@
+НОВОЕ ПОДКЛЮЧЕНИЕ SUPABASE — ONLINE V13
+=========================================
+
+Проект: qidtbympraxtluywvtyh
+Адрес: https://qidtbympraxtluywvtyh.supabase.co
+
+1. Запустите OPEN_SUPABASE_SETUP.bat.
+2. Выполните supabase/SETUP_CLEAN_SUPABASE.sql целиком.
+3. В Authentication -> URL Configuration добавьте:
+   http://localhost:8080
+   http://localhost:8080/**
+4. Запустите START.bat.
+5. Первым зарегистрируйте аккаунт начальника РОО.
+
+Не используйте RESET_ALL_DATA_KEEP_USERS.sql для нового проекта — база уже пустая.
+PATCH_V11_DESIGN_EDITOR.sql отдельно не нужен: исправление включено в чистый SETUP.

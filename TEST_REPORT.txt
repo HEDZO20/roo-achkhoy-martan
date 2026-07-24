@@ -1,0 +1,10 @@
+ONLINE V13 TEST REPORT
+========================
+[OK] New Supabase URL configured
+[OK] New publishable key configured
+[OK] Old project URL/key removed from all project files
+[OK] Clean setup SQL included
+[OK] V11 design editor schema included in clean setup
+[OK] SQL Editor launcher points to qidtbympraxtluywvtyh
+[OK] JavaScript syntax check completed
+[INFO] Live network connection could not be tested in the build environment; verify after running SQL.

@@ -1,0 +1,14 @@
+# Keep admin/setup materials in GitHub, but never publish them as website files
+supabase/
+*.bat
+*.ps1
+*.txt
+SHA256.txt
+TEST_REPORT.txt
+CHANGELOG_RU.txt
+NEW_SUPABASE_SETUP_RU.txt
+VERCEL_DEPLOY_RU.txt
+README_RU.txt
+README_GITHUB.md
+.gitignore
+ШАБЛОН_РЕЗУЛЬТАТОВ_ЭКЗАМЕНОВ.csv

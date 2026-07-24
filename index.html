@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#e8f0e3" />
+  <meta name="description" content="Рабочая система управления поручениями Отдела Образования Ачхой-Мартановского Района" />
+  <title>Отдел Образования Ачхой-Мартановского Района</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="v3.css" />
+  <link rel="stylesheet" href="v4.css" />
+  <link rel="stylesheet" href="v5.css" />
+  <link rel="stylesheet" href="v7.css" />
+  <link rel="stylesheet" href="v6.css" />
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+  <div class="ambient ambient-three"></div>
+  <div class="grid-overlay"></div>
+
+  <section id="loginScreen" class="login-screen">
+    <div class="login-shell">
+      <div class="login-intro">
+        <div class="brand-mark brand-mark-xl">ОО</div>
+        <span class="eyebrow">Единая цифровая система управления</span>
+        <h1>Отдел Образования<br /><span>Ачхой-Мартановского Района</span></h1>
+        <p>Поручения, автоматические сводки, согласования, контроль сроков, рейтинг школ и аналитика — в одном защищённом пространстве.</p>
+        <div class="feature-row">
+          <div class="feature-chip"><b>34</b><span>школы района</span></div>
+          <div class="feature-chip"><b>24/7</b><span>контроль исполнения</span></div>
+          <div class="feature-chip"><b>7</b><span>уровней доступа</span></div>
+        </div>
+        <div class="login-capabilities">
+          <span>✓ Автоматические напоминания</span>
+          <span>✓ Журнал всех действий</span>
+          <span>✓ Своды Excel и PDF</span>
+          <span>✓ Работа с телефона</span>
+        </div>
+      </div>
+
+      <div class="login-card glass-card">
+        <div class="login-card-head">
+          <span class="status-dot"></span>
+          <span>ONLINE V13 · новая чистая база Supabase</span>
+        </div>
+        <h2>Вход в систему</h2>
+        <p class="muted">Выберите должность, чтобы проверить реальные различия в правах.</p>
+        <form id="loginForm">
+          <label>Демонстрационная роль</label>
+          <select id="roleSelect" class="large-select">
+            <option value="chief">Начальник РОО</option>
+            <option value="deputy">Заместитель начальника РОО</option>
+            <option value="department_head">Начальник отдела</option>
+            <option value="specialist">Специалист отдела</option>
+            <option value="school_director">Директор школы</option>
+            <option value="school_staff">Ответственный сотрудник школы</option>
+            <option value="observer">Наблюдатель руководства</option>
+          </select>
+          <label>Электронная почта</label>
+          <input id="emailInput" type="email" value="chief@achkhoy-edu.ru" required />
+          <label>Пароль</label>
+          <div class="password-wrap">
+            <input id="passwordInput" type="password" value="123456" required />
+            <button type="button" id="togglePassword" class="icon-button" aria-label="Показать пароль">◉</button>
+          </div>
+          <div class="login-options">
+            <label class="checkbox-line"><input type="checkbox" checked /> Запомнить роль</label>
+            <button type="button" class="text-button" id="resetDemoFromLogin">Сбросить демо-данные</button>
+          </div>
+          <button class="primary-button full" type="submit">Войти в систему <span>→</span></button>
+        </form>
+        <div class="demo-note">
+          <strong>Пароль для всех ролей: 123456</strong>
+          <span>В демо-режиме проверка почты отключена — просто выберите роль.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand v5-brand">
+        <img class="v5-emblem" src="assets/emblem.svg" alt="Эмблема отдела образования" />
+        <div class="v5-brand-text">
+          <strong>Отдел Образования</strong>
+          <span>Ачхой-Мартановского района</span>
+        </div>
+      </div>
+
+      <div class="role-scope-card v5-role-card" id="roleScopeCard">
+        <span>Вы вошли как</span>
+        <strong id="sidebarRoleName">Начальник РОО</strong>
+        <small id="sidebarScopeText">Все отделы и школы района</small>
+      </div>
+
+      <nav class="sidebar-nav v5-nav" id="sidebarNav">
+        <div class="nav-section-label">Управление</div>
+        <button class="nav-item active" data-page="dashboard"><span class="nav-icon">⌂</span><span>1. Главная</span></button>
+        <button class="nav-item" data-page="tasks"><span class="nav-icon">▣</span><span>2. Поручения</span><b class="nav-badge" id="taskNavBadge">12</b></button>
+        <button class="nav-item" data-page="schools"><span class="nav-icon">▦</span><span>3. Школы</span></button>
+        <button class="nav-item" data-page="rating"><span class="nav-icon">▥</span><span>4. Рейтинг</span></button>
+
+        <div class="nav-section-label">Документооборот</div>
+        <button class="nav-item" data-page="reports"><span class="nav-icon">▤</span><span>5. Отчёты</span></button>
+        <button class="nav-item" data-page="calendar"><span class="nav-icon">□</span><span>6. Календарь</span></button>
+        <button class="nav-item" data-page="documents"><span class="nav-icon">▧</span><span>7. Документы</span></button>
+        <button class="nav-item" data-page="appeals"><span class="nav-icon">✉</span><span>8. Обращения</span><b class="nav-badge warning">4</b></button>
+
+        <div class="nav-section-label">Контроль и аналитика</div>
+        <button class="nav-item" data-page="exams"><span class="nav-icon">◫</span><span>9. Анализ экзаменов</span><b class="nav-badge v7-new-badge">NEW</b></button>
+        <button class="nav-item" data-page="department_control"><span class="nav-icon">▦</span><span>10. Работа отделов</span></button>
+        <button class="nav-item" data-page="meetings"><span class="nav-icon">♙</span><span>11. Совещания</span></button>
+        <button class="nav-item" data-page="inspections"><span class="nav-icon">◇</span><span>12. Проверки</span></button>
+
+        <div class="nav-section-label">Администрирование</div>
+        <button class="nav-item" data-page="users"><span class="nav-icon">♙</span><span>13. Пользователи и роли</span></button>
+        <button class="nav-item" data-page="constructor"><span class="nav-icon">⚙</span><span>14. Настройки</span></button>
+
+        <button class="nav-item v5-hidden-nav" data-page="approvals"><span>Согласования</span><b id="approvalNavBadge">0</b></button>
+        <button class="nav-item v5-hidden-nav" data-page="situation"><span>Ситуационный центр</span></button>
+        <button class="nav-item v5-hidden-nav" data-page="indicators"><span>Реестр показателей</span></button>
+        <button class="nav-item v5-hidden-nav" data-page="departments"><span>Отделы РОО</span></button>
+        <button class="nav-item v5-hidden-nav" data-page="automations"><span>Автоматизация</span></button>
+        <button class="nav-item v5-hidden-nav" data-page="personal"><span>Мои задачи</span></button>
+        <button class="nav-item v5-hidden-nav" data-page="archive"><span>Архив</span></button>
+        <button class="nav-item v5-hidden-nav" data-page="audit"><span>Журнал действий</span></button>
+      </nav>
+
+      <div class="sidebar-bottom v5-sidebar-bottom">
+        <div class="support-card v5-support-card">
+          <div class="support-icon">◉</div>
+          <div><strong>Техническая поддержка</strong><span>8 (8714) 22-33-44</span><small>Будни 9:00–18:00</small></div>
+          <button id="helpButton">Инструкция</button>
+        </div>
+        <button id="logoutButton" class="logout-button"><span>↪</span> Выйти</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar v5-topbar">
+        <button id="menuButton" class="menu-button" aria-label="Меню">☰</button>
+        <div class="v5-header-brand">
+          <span id="pageEyebrow">Отдел Образования</span>
+          <h2 id="pageTitle">Ачхой-Мартановского Района</h2>
+        </div>
+        <div class="topbar-actions v5-top-actions">
+          <div class="search-box v5-search-box">
+            <span>⌕</span>
+            <input id="globalSearch" type="search" placeholder="Поиск по системе..." />
+          </div>
+          <button class="command-button v5-command" id="commandButton" title="Быстрый поиск и команды"><span>⌕</span><kbd>Ctrl K</kbd></button>
+          <button class="round-button update-indicator v5-utility" id="versionButton" title="Версия системы">V12</button>
+          <button class="round-button v5-utility" id="themeButton" title="Переключить тему">◐</button>
+          <button class="round-button notification-button v5-notification" id="notificationButton" title="Уведомления">♢<b id="notificationCount">4</b></button>
+          <button class="user-card v5-user-card" id="userCardButton">
+            <div class="avatar" id="userAvatar">МА</div>
+            <div><strong id="userName">Магомед А.</strong><span id="userRole">Начальник РОО</span></div>
+            <span>⌄</span>
+          </button>
+        </div>
+      </header>
+
+      <aside class="floating-panel hidden" id="notificationPanel">
+        <div class="floating-head"><div><span class="eyebrow">Центр уведомлений</span><h3>Новые события</h3></div><button class="round-button" data-close-floating>×</button></div>
+        <div id="notificationList" class="notification-list"></div>
+        <button class="secondary-button full" id="markAllReadButton">Отметить всё прочитанным</button>
+      </aside>
+
+      <aside class="floating-panel profile-panel hidden" id="profilePanel">
+        <div class="profile-summary">
+          <div class="avatar large" id="profileAvatar">МА</div>
+          <div><strong id="profileName">Магомед А.</strong><span id="profilePosition">Начальник РОО</span></div>
+        </div>
+        <label>Переключить демо-роль</label>
+        <select id="quickRoleSwitcher">
+          <option value="chief">Начальник РОО</option>
+          <option value="deputy">Заместитель начальника РОО</option>
+          <option value="department_head">Начальник отдела</option>
+          <option value="specialist">Специалист отдела</option>
+          <option value="school_director">Директор школы</option>
+          <option value="school_staff">Ответственный школы</option>
+          <option value="observer">Наблюдатель руководства</option>
+        </select>
+        <div class="profile-actions">
+          <button id="profilePermissionsButton">Мои права</button>
+          <button id="resetDemoButton">Сбросить демо</button>
+        </div>
+      </aside>
+
+      <div class="content-wrap">
+        <section class="page active v5-dashboard-page" id="page-dashboard">
+          <div class="v5-dashboard-top">
+            <article class="v5-welcome-card">
+              <div class="v5-welcome-icon">●</div>
+              <div>
+                <span class="eyebrow" id="todayLabel">Среда, 22 июля 2026</span>
+                <p class="v5-welcome-kicker">Добро пожаловать,</p>
+                <h1 id="welcomeTitle">Начальник РОО!</h1>
+                <p id="welcomeText">Здесь вы можете контролировать исполнение поручений, анализировать показатели и управлять образовательной деятельностью района.</p>
+              </div>
+            </article>
+
+            <article class="v5-workflow-card">
+              <div class="panel-head"><div><span class="eyebrow">Понятный маршрут</span><h3>Этапы прохождения поручения</h3></div></div>
+              <div class="v5-workflow">
+                <button data-page-jump="tasks"><i>▤</i><span>Новое</span></button><b>→</b>
+                <button data-page-jump="tasks"><i>◷</i><span>В работе</span></button><b>→</b>
+                <button data-page-jump="tasks"><i>●</i><span>У директора</span></button><b>→</b>
+                <button data-page-jump="approvals"><i>▦</i><span>В РОО</span></button><b>→</b>
+                <button data-page-jump="archive"><i>✓</i><span>Принято</span></button>
+              </div>
+            </article>
+          </div>
+
+          <div class="v5-kpi-grid" id="v5Kpis"></div>
+
+          <div class="v5-main-grid">
+            <article class="panel v5-attention-panel">
+              <div class="panel-head"><div><span class="eyebrow">Контроль</span><h3>Что требует внимания</h3></div><button class="text-button" data-page-jump="situation">Все риски →</button></div>
+              <div id="v5Attention"></div>
+            </article>
+
+            <article class="panel v5-recent-panel">
+              <div class="panel-head"><div><span class="eyebrow">Работа</span><h3>Последние поручения</h3></div><button class="text-button" data-page-jump="tasks">Все поручения →</button></div>
+              <div class="responsive-table"><table><thead><tr><th>Поручение</th><th>Статус</th><th>Срок</th><th>Ответственный</th></tr></thead><tbody id="v5RecentTasks"></tbody></table></div>
+            </article>
+
+            <article class="panel v5-rating-panel">
+              <div class="panel-head"><div><span class="eyebrow">Рейтинг</span><h3 id="dashboardRatingTitle">Рейтинг школ</h3></div><button class="text-button" data-page-jump="rating">Весь рейтинг →</button></div>
+              <div id="v5Ranking"></div>
+            </article>
+          </div>
+
+          <div class="v5-bottom-grid">
+            <article class="panel v5-deadlines-panel">
+              <div class="panel-head"><div><span class="eyebrow">Календарь</span><h3>Ближайшие сроки</h3></div><button class="text-button" data-page-jump="calendar">Открыть календарь →</button></div>
+              <div id="v5Deadlines"></div>
+            </article>
+
+            <article class="panel v5-quick-panel">
+              <div class="panel-head"><div><span class="eyebrow">Без лишних шагов</span><h3>Быстрые действия</h3></div></div>
+              <div class="v5-quick-actions">
+                <button data-open-task-modal><i>＋</i><span>Создать поручение</span><small>Поставить новое задание</small></button>
+                <button data-page-jump="approvals"><i>▤</i><span>Проверить отчёты</span><small>Перейти к поступившим ответам</small></button>
+                <button data-page-jump="rating"><i>▥</i><span>Открыть рейтинг</span><small>Посмотреть школы района</small></button>
+                <button data-page-jump="reports"><i>◔</i><span>Сформировать сводку</span><small>Подготовить аналитический отчёт</small></button>
+              </div>
+            </article>
+          </div>
+
+          <div class="v5-secondary-tools panel">
+            <div class="panel-head"><div><span class="eyebrow">Дополнительные инструменты</span><h3>Все функции системы — в одном месте</h3></div><button class="text-button" data-page-jump="constructor">Настроить систему →</button></div>
+            <div class="v5-tool-links">
+              <button data-page-jump="situation">Ситуационный центр</button>
+              <button data-page-jump="indicators">Реестр показателей</button>
+              <button data-page-jump="departments">Отделы РОО</button>
+              <button data-page-jump="automations">Автоматизация</button>
+              <button data-page-jump="personal">Мои задачи</button>
+              <button data-page-jump="archive">Архив</button>
+              <button data-page-jump="audit">Журнал действий</button>
+            </div>
+          </div>
+
+          <div class="v5-data-bridge" aria-hidden="true">
+            <div id="scopeBannerTitle"></div><div id="scopeBannerText"></div>
+            <div id="districtProgressRing"><div id="districtProgressValue"></div></div><div id="districtProgressLabel"></div>
+            <div id="dashboardStats"></div><div id="barChart"></div><div id="deadlineList"></div><div id="topSchools"></div><div id="activityList"></div>
+            <article id="dashboardApprovalPanel"><div id="dashboardApprovals"></div></article>
+          </div>
+        </section>
+
+        <section class="page" id="page-tasks">
+          <div class="page-heading-row">
+            <div><span class="eyebrow">Управление</span><h1>Поручения</h1><p id="tasksPageDescription">Создание, распределение, контроль выполнения и проверка отчётов школ.</p></div>
+            <button class="primary-button" id="createTaskButton" data-open-task-modal>+ Новое поручение</button>
+          </div>
+          <div class="filter-row">
+            <div class="tab-filter" id="taskTabs">
+              <button class="active" data-filter="all">Все <b id="taskCountAll">0</b></button>
+              <button data-filter="active">Активные <b id="taskCountActive">0</b></button>
+              <button data-filter="review">На проверке <b id="taskCountReview">0</b></button>
+              <button data-filter="pending_approval">На согласовании <b id="taskCountPending">0</b></button>
+              <button data-filter="overdue">Просроченные <b id="taskCountOverdue">0</b></button>
+              <button data-filter="done">Завершённые <b id="taskCountDone">0</b></button>
+            </div>
+            <div class="table-tools">
+              <input id="taskSearch" type="search" placeholder="Поиск поручений" />
+              <select id="taskDirection"><option value="all">Все направления</option></select>
+            </div>
+          </div>
+          <div class="panel table-panel">
+            <div class="responsive-table">
+              <table>
+                <thead><tr><th>Поручение</th><th>Ответственный отдел</th><th>Срок</th><th>Исполнение</th><th>Статус</th><th>Действия</th></tr></thead>
+                <tbody id="tasksTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="page-approvals">
+          <div class="page-heading-row">
+            <div><span class="eyebrow">Контроль решений</span><h1>Согласования</h1><p>Публикация важных поручений, согласование сводок и подтверждение отчётов.</p></div>
+            <div class="heading-badges"><span class="tag orange" id="pendingApprovalHeading">0 ожидают</span><span class="tag blue">Маршруты согласования включены</span></div>
+          </div>
+          <div class="approval-layout">
+            <article class="panel">
+              <div class="panel-head"><div><span class="eyebrow">Очередь</span><h3>Ожидают вашего решения</h3></div><select id="approvalTypeFilter"><option value="all">Все типы</option><option value="task">Поручения</option><option value="report">Отчёты</option><option value="rating">Изменения рейтинга</option></select></div>
+              <div id="approvalQueue" class="approval-queue"></div>
+            </article>
+            <article class="panel route-panel">
+              <div class="panel-head"><div><span class="eyebrow">Правила</span><h3>Маршруты согласования</h3></div></div>
+              <div class="route-list" id="approvalRoutes"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" id="page-schools">
+          <div class="page-heading-row">
+            <div><span class="eyebrow">Организации</span><h1>Школы района</h1><p>Карточки школ, ответственные сотрудники, поручения и исполнительская дисциплина.</p></div>
+            <button class="primary-button" id="addSchoolButton">+ Добавить школу</button>
+          </div>
+          <div class="schools-summary" id="schoolsSummary"></div>
+          <div class="filter-row compact-filter">
+            <div class="table-tools grow"><input id="schoolSearch" type="search" placeholder="Найти школу, директора или населённый пункт" /><select id="schoolRiskFilter"><option value="all">Все школы</option><option value="good">Высокий рейтинг</option><option value="attention">Требуют внимания</option><option value="critical">Критический риск</option></select></div>
+          </div>
+          <div class="school-grid" id="schoolGrid"></div>
+        </section>
+
+        <section class="page" id="page-rating">
+          <div class="page-heading-row">
+            <div><span class="eyebrow">Исполнительская дисциплина</span><h1>Рейтинг школ</h1><p>Расчёт по срокам, качеству, полноте ответа и скорости реакции.</p></div>
+            <button class="secondary-button" id="exportRatingButton">⇩ Экспорт отчёта</button>
+          </div>
+          <div class="rating-hero" id="ratingHero"></div>
+          <div class="rating-formula panel">
+            <div><span class="eyebrow">Формула</span><h3>Как считается рейтинг</h3></div>
+            <div class="formula-pills"><span><b>40%</b> сроки</span><span><b>30%</b> качество</span><span><b>20%</b> полнота</span><span><b>10%</b> скорость реакции</span></div>
+            <button class="text-button" id="ratingRulesButton">Подробные правила →</button>
+          </div>
+          <div class="panel table-panel">
+            <div class="panel-head rating-filter-head">
+              <div class="rating-tabs" id="ratingTabs"><button class="active" data-period="july">Июль 2026</button><button data-period="june">Июнь 2026</button><button data-period="year">Учебный год</button></div>
+              <div class="table-tools"><input id="ratingSearch" type="search" placeholder="Найти школу" /><select id="ratingDirection"><option value="all">Все направления</option></select></div>
+            </div>
+            <div class="responsive-table">
+              <table class="rating-table">
+                <thead><tr><th>Место</th><th>Школа</th><th>Назначено</th><th>Вовремя</th><th>Просрочено</th><th>Возвраты</th><th>Качество</th><th>Динамика</th><th>Рейтинг</th></tr></thead>
+                <tbody id="ratingTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+
+        <section class="page v7-page" id="page-exams">
+          <div class="page-heading v7-page-heading">
+            <div><span class="eyebrow">ЕГЭ · ОГЭ · ГИА</span><h1>Анализ результатов экзаменов</h1><p>Загрузите результаты, проверьте ошибки и получите полный анализ по ученикам, школам, предметам и оценкам.</p></div>
+            <div class="heading-actions"><button class="secondary-button" id="examDownloadTemplate">Скачать шаблон Excel/CSV</button><button class="primary-button" id="examUploadButton">Загрузить результаты</button><input class="hidden" id="examFileInput" type="file" accept=".csv,.txt,.xlsx,.xls"></div>
+          </div>
+
+          <div class="v7-exam-toolbar panel">
+            <div class="v7-filter-grid">
+              <label>Учебный год<select id="examYearFilter"><option>2025/2026</option><option>2024/2025</option><option>2023/2024</option></select></label>
+              <label>Экзамен<select id="examTypeFilter"><option value="all">Все экзамены</option><option>ЕГЭ</option><option>ОГЭ</option><option>ГИА</option></select></label>
+              <label>Предмет<select id="examSubjectFilter"><option value="all">Все предметы</option></select></label>
+              <label>Школа<select id="examSchoolFilter"><option value="all">Все школы</option></select></label>
+              <label>Статус<select id="examStatusFilter"><option value="all">Все результаты</option><option value="passed">Сдали</option><option value="failed">Не сдали</option><option value="absent">Не явились</option><option value="late">Опоздали</option></select></label>
+              <label>Поиск ученика<input id="examStudentSearch" type="search" placeholder="Фамилия, имя..."></label>
+            </div>
+            <div class="v7-toolbar-actions"><span id="examImportStatus" class="v7-import-status">Данные ещё не загружены</span><button class="secondary-button" id="examExportFiltered">Экспорт списка</button></div>
+          </div>
+
+          <div class="v7-exam-tabs" id="examTabs">
+            <button class="active" data-exam-tab="overview">Общий анализ</button>
+            <button data-exam-tab="students">Пофамильный список</button>
+            <button data-exam-tab="schools">Сравнение школ</button>
+            <button data-exam-tab="quality">Ошибки и качество данных</button>
+          </div>
+
+          <div class="v7-exam-panel active" data-exam-panel="overview">
+            <div class="v7-kpi-grid" id="examKpis"></div>
+            <div class="v7-analytics-grid">
+              <article class="panel v7-chart-card"><div class="panel-head"><div><span class="eyebrow">Распределение</span><h3>Оценки 5 / 4 / 3 / 2</h3></div></div><div id="examGradeChart" class="v7-bars-chart"></div></article>
+              <article class="panel v7-chart-card"><div class="panel-head"><div><span class="eyebrow">Баллы</span><h3>Диапазоны результатов</h3></div></div><div id="examScoreChart" class="v7-bars-chart horizontal"></div></article>
+              <article class="panel v7-analysis-note"><div class="panel-head"><div><span class="eyebrow">Автоматический вывод</span><h3>Аналитическая справка</h3></div><button class="text-button" id="examCopyAnalysis">Копировать</button></div><div id="examAnalysisText"></div></article>
+            </div>
+            <article class="panel"><div class="panel-head"><div><span class="eyebrow">Контроль риска</span><h3>Кому требуется внимание</h3></div></div><div id="examRiskList" class="v7-risk-list"></div></article>
+          </div>
+
+          <div class="v7-exam-panel" data-exam-panel="students">
+            <article class="panel"><div class="panel-head"><div><span class="eyebrow">Персональные результаты</span><h3>Пофамильный список</h3></div><span id="examStudentCount" class="muted"></span></div><div class="table-wrap"><table class="data-table v7-exam-table"><thead><tr><th>№</th><th>ФИО</th><th>Школа</th><th>Класс</th><th>Экзамен</th><th>Предмет</th><th>Балл</th><th>Оценка</th><th>Статус</th><th>Опоздание</th></tr></thead><tbody id="examStudentsBody"></tbody></table></div></article>
+          </div>
+
+          <div class="v7-exam-panel" data-exam-panel="schools">
+            <div class="v7-school-analysis-grid" id="examSchoolCards"></div>
+            <article class="panel"><div class="panel-head"><div><span class="eyebrow">Сравнительная таблица</span><h3>Результаты школ</h3></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Место</th><th>Школа</th><th>Участников</th><th>Средний балл</th><th>Сдали</th><th>Не сдали</th><th>Оценки 4–5</th><th>Опоздали</th></tr></thead><tbody id="examSchoolsBody"></tbody></table></div></article>
+          </div>
+
+          <div class="v7-exam-panel" data-exam-panel="quality">
+            <div class="v7-quality-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">Проверка загрузки</span><h3>Ошибки и предупреждения</h3></div></div><div id="examQualityList"></div></article><article class="panel"><div class="panel-head"><div><span class="eyebrow">Формат файла</span><h3>Как правильно загрузить данные</h3></div></div><ol class="v7-instruction-list"><li>Загрузите Excel (XLSX/XLS) или CSV с результатами.</li><li>Сайт сам найдёт заголовки и распознает распространённые названия колонок.</li><li>Проверьте предпросмотр, ошибки и неизвестные школы.</li><li>Подтвердите импорт — таблицы, показатели и графики заполнятся автоматически.</li></ol><div class="v7-column-tags"><span>ФИО</span><span>Школа</span><span>Класс</span><span>Экзамен</span><span>Предмет</span><span>Балл</span><span>Оценка</span><span>Статус</span><span>Опоздание</span></div><p class="muted">Поддерживаются XLSX, XLS и CSV. Если названия колонок нестандартные, система покажет, какие поля не удалось распознать.</p></article></div>
+          </div>
+        </section>
+
+        <section class="page v7-page" id="page-department_control">
+          <div class="page-heading v7-page-heading"><div><span class="eyebrow">Внутренний контроль РОО</span><h1>Работа отделов и начальников</h1><p>Поручения отделов, ответы школ, скорость проверки, активность аккаунтов и объективный рейтинг работы.</p></div><div class="heading-actions"><button class="secondary-button" id="departmentExportButton">Экспорт рейтинга</button><button class="primary-button" id="departmentRefreshButton">Обновить показатели</button></div></div>
+          <div class="v7-dept-summary" id="departmentSummary"></div>
+          <div class="v7-dept-layout">
+            <div>
+              <div class="v7-section-title"><div><span class="eyebrow">Подразделения</span><h2>Отделы РОО</h2></div><span class="muted">Нажмите на карточку для подробного контроля</span></div>
+              <div class="v7-department-grid" id="departmentCards"></div>
+            </div>
+            <aside class="panel v7-dept-rating-panel"><div class="panel-head"><div><span class="eyebrow">За текущий месяц</span><h3>Рейтинг отделов</h3></div><button class="text-button" id="departmentRatingRules">Как считается?</button></div><div id="departmentRatingList"></div></aside>
+          </div>
+          <article class="panel v7-dept-detail" id="departmentDetail">
+            <div class="v7-empty-state"><span>▦</span><h3>Выберите отдел</h3><p>Здесь появятся поручения, ответы школ, активность аккаунта и показатели начальника отдела.</p></div>
+          </article>
+        </section>
+
+        <section class="page" id="page-departments">
+          <div class="page-heading-row"><div><span class="eyebrow">Структура РОО</span><h1>Отделы и направления</h1><p>Ответственные, нагрузка, сроки и качество работы каждого подразделения.</p></div><button class="primary-button" id="addDepartmentButton">+ Добавить отдел</button></div>
+          <div class="department-grid" id="departmentGrid"></div>
+          <div class="dashboard-grid lower-grid">
+            <article class="panel"><div class="panel-head"><div><span class="eyebrow">Нагрузка</span><h3>Поручения по отделам</h3></div></div><div id="departmentLoadChart" class="horizontal-chart"></div></article>
+            <article class="panel"><div class="panel-head"><div><span class="eyebrow">Команда</span><h3>Руководители подразделений</h3></div></div><div id="departmentHeads" class="people-list"></div></article>
+          </div>
+        </section>
+
+        <section class="page" id="page-reports">
+          <div class="page-heading-row"><div><span class="eyebrow">Документы</span><h1>Отчёты и автоматические сводки</h1><p>Формирование районных таблиц без ручного копирования данных из файлов школ.</p></div><button class="primary-button" id="buildReportButton">+ Сформировать отчёт</button></div>
+          <div class="report-summary-grid" id="reportSummary"></div>
+          <div class="report-grid" id="reportGrid"></div>
+          <article class="panel report-builder-panel">
+            <div class="panel-head"><div><span class="eyebrow">Конструктор</span><h3>Новая сводка</h3></div><span class="tag green">Автосбор данных</span></div>
+            <div class="report-builder-grid">
+              <label>Тип отчёта<select id="reportType"><option>Исполнительская дисциплина</option><option>Анализ ГИА</option><option>Просрочки по отделам</option><option>Рейтинг школ</option><option>Свод по форме поручения</option></select></label>
+              <label>Период<select id="reportPeriod"><option>Июль 2026</option><option>Июнь 2026</option><option>2025–2026 учебный год</option></select></label>
+              <label>Формат<select id="reportFormat"><option>Excel (.csv в демо)</option><option>PDF (предпросмотр)</option></select></label>
+              <button class="primary-button" id="generateReportButton">Сформировать</button>
+            </div>
+          </article>
+        </section>
+
+
+        <section class="page" id="page-situation">
+          <div class="page-heading-row"><div><span class="eyebrow">Режим руководителя</span><h1>Ситуационный центр</h1><p>Критические риски, исполнение поручений, нагрузка отделов и школы, требующие вмешательства.</p></div><button class="primary-button" id="presentationModeButton">▣ Режим большого экрана</button></div>
+          <div class="situation-hero panel"><div><span class="live-pill"><i></i> Данные обновлены сейчас</span><h2>Исполнительская дисциплина района — <b>88,4%</b></h2><p>За последние 7 дней показатель вырос на 4,2%. Пять школ требуют внимания руководства.</p></div><div class="situation-clock" id="situationClock">19:00</div></div>
+          <div class="situation-stats" id="situationStats"></div>
+          <div class="dashboard-grid situation-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">Приоритеты</span><h3>Требуют решения сегодня</h3></div><span class="tag red">5 рисков</span></div><div id="situationRisks" class="risk-feed"></div></article><article class="panel"><div class="panel-head"><div><span class="eyebrow">Подразделения</span><h3>Эффективность отделов</h3></div></div><div id="situationDepartments" class="department-score-list"></div></article></div>
+          <article class="panel"><div class="panel-head"><div><span class="eyebrow">Динамика</span><h3>Исполнение за последние 14 дней</h3></div><div class="legend"><span><i class="legend-blue"></i> вовремя</span><span><i class="legend-red"></i> просрочено</span></div></div><div class="trend-columns" id="situationTrend"></div></article>
+        </section>
+
+        <section class="page" id="page-indicators">
+          <div class="page-heading-row"><div><span class="eyebrow">Цифровой паспорт школы</span><h1>Реестр показателей</h1><p>Единая история численности, кадров, результатов, питания, безопасности и других показателей школ.</p></div><button class="primary-button" id="addIndicatorButton">+ Добавить показатель</button></div>
+          <article class="panel registry-toolbar"><label>Школа<select id="indicatorSchoolSelect"></select></label><label>Период<select id="indicatorPeriod"><option>2025–2026 учебный год</option><option>2024–2025 учебный год</option></select></label><button class="secondary-button" id="compareIndicatorsButton">Сравнить периоды</button><button class="secondary-button" id="exportPassportButton">⇩ Паспорт школы</button></article>
+          <div class="indicator-summary" id="indicatorSummary"></div>
+          <div class="dashboard-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">История</span><h3>Динамика ключевых показателей</h3></div></div><div id="indicatorTrend" class="metric-trend"></div></article><article class="panel"><div class="panel-head"><div><span class="eyebrow">Автопроверка</span><h3>Найдены отклонения</h3></div><span class="tag orange">3 сигнала</span></div><div id="indicatorAnomalies" class="anomaly-list"></div></article></div>
+          <article class="panel"><div class="panel-head"><div><span class="eyebrow">Все показатели</span><h3>Карточка образовательной организации</h3></div><input id="indicatorSearch" placeholder="Найти показатель" /></div><div class="indicator-table" id="indicatorTable"></div></article>
+        </section>
+
+        <section class="page" id="page-automations">
+          <div class="page-heading-row"><div><span class="eyebrow">Без ручного контроля</span><h1>Автоматизация</h1><p>Правила напоминаний, эскалаций, автоматического формирования сводок и контроля отклонений.</p></div><button class="primary-button" id="addAutomationButton">+ Новое правило</button></div>
+          <div class="automation-summary" id="automationSummary"></div>
+          <article class="panel automation-builder" id="automationBuilder"><div class="panel-head"><div><span class="eyebrow">Конструктор правила</span><h3>Если произошло событие — выполнить действие</h3></div><span class="tag green">Без программирования</span></div><div class="rule-sentence"><select id="automationTrigger"><option>Поручение не открыто 24 часа</option><option>До срока осталось 3 часа</option><option>Отчёт возвращён два раза</option><option>Все школы отправили данные</option><option>Показатель изменился более чем на 15%</option></select><span>→</span><select id="automationAction"><option>Уведомить директора и начальника отдела</option><option>Отправить повторное напоминание</option><option>Создать задачу заместителю</option><option>Сформировать районную сводку</option><option>Запросить подтверждение данных</option></select><button class="primary-button" id="saveAutomationButton">Сохранить правило</button></div></article>
+          <div class="automation-list" id="automationList"></div>
+        </section>
+
+        <section class="page" id="page-constructor">
+          <div class="v5-settings-hub panel">
+            <div class="panel-head"><div><span class="eyebrow">Простые настройки</span><h3>Управление всеми возможностями сайта</h3></div><span class="tag green">Без изменения кода</span></div>
+            <p class="muted">Основные разделы находятся слева. Более редкие и технические инструменты собраны здесь, чтобы меню оставалось понятным.</p>
+            <div class="v5-settings-links">
+              <button id="openVisualEditorFromSettings" class="v6-editor-settings-card"><i>✦</i><strong>Визуальный редактор</strong><span>Шрифты, цвета, блоки, тексты и фон без кода</span></button>
+              <button data-page-jump="approvals"><i>✓</i><strong>Согласования</strong><span>Маршруты утверждения документов</span></button>
+              <button data-page-jump="indicators"><i>▥</i><strong>Реестр показателей</strong><span>Цифровые паспорта школ</span></button>
+              <button data-page-jump="departments"><i>▦</i><strong>Отделы РОО</strong><span>Структура и нагрузка подразделений</span></button>
+              <button data-page-jump="automations"><i>⚡</i><strong>Автоматизация</strong><span>Напоминания и правила эскалации</span></button>
+              <button data-page-jump="personal"><i>□</i><strong>Мои задачи</strong><span>Личный рабочий список и замещение</span></button>
+              <button data-page-jump="archive"><i>▣</i><strong>Архив</strong><span>Завершённые поручения и версии</span></button>
+              <button data-page-jump="audit"><i>≡</i><strong>Журнал действий</strong><span>Полная история операций</span></button>
+              <button data-page-jump="situation"><i>◉</i><strong>Ситуационный центр</strong><span>Панель руководителя и риски</span></button>
+            </div>
+          </div>
+
+          <div class="page-heading-row"><div><span class="eyebrow">Настройка без обновления сайта</span><h1>Конструктор системы</h1><p>Создавайте формы, роли, маршруты, рейтинги, отчёты и модули прямо из административной панели.</p></div><span class="builder-status"><i></i> Все изменения сохраняются автоматически</span></div>
+          <div class="builder-tabs" id="builderTabs"><button class="active" data-builder-tab="forms">Формы</button><button data-builder-tab="workflows">Согласования</button><button data-builder-tab="rating">Рейтинг</button><button data-builder-tab="roles">Роли и права</button><button data-builder-tab="dashboard">Главные панели</button><button data-builder-tab="reports">Шаблоны отчётов</button><button data-builder-tab="modules">Модули</button></div>
+          <div id="builderContent"></div>
+        </section>
+
+        <section class="page" id="page-inspections">
+          <div class="page-heading-row"><div><span class="eyebrow">Контроль исполнения предписаний</span><h1>Проверки школ</h1><p>Чек-листы, выявленные нарушения, фотофиксация, сроки устранения и повторные проверки.</p></div><button class="primary-button" id="addInspectionButton">+ Назначить проверку</button></div>
+          <div class="inspection-summary" id="inspectionSummary"></div><div class="inspection-grid" id="inspectionGrid"></div>
+        </section>
+
+        <section class="page" id="page-meetings">
+          <div class="page-heading-row"><div><span class="eyebrow">Совещания и протоколы</span><h1>Совещания</h1><p>Приглашения, подтверждение участия, повестка, материалы и автоматические поручения из протокола.</p></div><button class="primary-button" id="addMeetingButton">+ Создать совещание</button></div>
+          <div class="meeting-layout"><div id="meetingList" class="meeting-list"></div><article class="panel meeting-protocol"><div class="panel-head"><div><span class="eyebrow">Протокол №18</span><h3>Поручения по итогам совещания</h3></div><span class="tag purple">Черновик</span></div><div id="protocolItems"></div><button class="primary-button full" id="convertProtocolButton">Создать поручения из протокола</button></article></div>
+        </section>
+
+        <section class="page" id="page-appeals">
+          <div class="page-heading-row"><div><span class="eyebrow">Единое окно</span><h1>Обращения школ</h1><p>Запросы, продление сроков, кадровые и технические вопросы с номером и контролем срока ответа.</p></div><button class="primary-button" id="newAppealButton">+ Новое обращение</button></div>
+          <div class="appeal-summary" id="appealSummary"></div><div class="appeal-board" id="appealBoard"></div>
+        </section>
+
+        <section class="page" id="page-documents">
+          <div class="page-heading-row"><div><span class="eyebrow">Единая база</span><h1>Документы и материалы</h1><p>Приказы, положения, инструкции, образцы, методические материалы и контроль ознакомления.</p></div><button class="primary-button" id="addDocumentButton">+ Добавить документ</button></div>
+          <article class="panel document-toolbar"><input id="documentSearch" placeholder="Название, номер или тема документа" /><select id="documentCategory"><option value="all">Все категории</option><option>Приказы</option><option>Инструкции</option><option>Шаблоны</option><option>Методические материалы</option></select><button class="secondary-button" id="documentReadReportButton">Отчёт об ознакомлении</button></article><div class="document-grid" id="documentGrid"></div>
+        </section>
+
+        <section class="page" id="page-personal">
+          <div class="page-heading-row"><div><span class="eyebrow">Персональное рабочее пространство</span><h1>Мои задачи</h1><p>Все поручения, согласования, проверки, обращения и личные напоминания в одном списке.</p></div><button class="primary-button" id="addPersonalTaskButton">+ Личная задача</button></div>
+          <div class="personal-summary" id="personalSummary"></div><div class="dashboard-grid"><article class="panel"><div class="panel-head"><div><span class="eyebrow">Сегодня</span><h3>Приоритетные задачи</h3></div><select id="personalTaskFilter"><option value="all">Все</option><option value="open">Невыполненные</option><option value="done">Выполненные</option></select></div><div id="personalTaskList" class="personal-task-list"></div></article><article class="panel"><div class="panel-head"><div><span class="eyebrow">Замещение</span><h3>Передача дел</h3></div><span class="tag blue">Настраивается</span></div><div class="delegation-form"><label>Замещающий сотрудник<select id="delegationUser"></select></label><div class="date-pair"><label>С даты<input id="delegationFrom" type="date" value="2026-07-22" /></label><label>По дату<input id="delegationTo" type="date" value="2026-08-05" /></label></div><label class="checkbox-line"><input id="delegationTasks" type="checkbox" checked /> Передать активные поручения</label><label class="checkbox-line"><input id="delegationApprovals" type="checkbox" checked /> Передать согласования</label><button class="secondary-button full" id="saveDelegationButton">Сохранить замещение</button><div id="delegationStatus" class="delegation-status"></div></div></article></div>
+        </section>
+        <section class="page" id="page-calendar">
+          <div class="page-heading-row"><div><span class="eyebrow">Планирование</span><h1>Календарь</h1><p>Сроки поручений, регулярные отчёты, совещания и контрольные даты.</p></div><button class="primary-button" id="addEventButton">+ Добавить событие</button></div>
+          <div class="calendar-layout">
+            <article class="panel calendar-card">
+              <div class="calendar-head"><button id="calendarPrev">‹</button><h3 id="calendarMonthTitle">Июль 2026</h3><button id="calendarNext">›</button></div>
+              <div class="calendar-week"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+              <div class="calendar-days" id="calendarDays"></div>
+            </article>
+            <article class="panel calendar-agenda"><div class="panel-head"><div><span class="eyebrow" id="agendaDate">21 июля</span><h3>События дня</h3></div></div><div id="agendaList"></div></article>
+          </div>
+        </section>
+
+        <section class="page" id="page-archive">
+          <div class="page-heading-row"><div><span class="eyebrow">Хранилище</span><h1>Архив</h1><p>Завершённые поручения, версии файлов, отчёты и история по учебным годам.</p></div><button class="secondary-button" id="downloadArchiveButton">⇩ Скачать перечень</button></div>
+          <div class="archive-years" id="archiveYears"></div>
+          <article class="panel archive-search-panel"><div class="panel-head"><div><span class="eyebrow">Быстрый поиск</span><h3>Найти документ в архиве</h3></div></div><div class="archive-search-row"><input id="archiveSearch" placeholder="Название поручения, школа или номер документа" /><select id="archiveYear"><option>Все годы</option><option>2025–2026</option><option>2024–2025</option><option>2023–2024</option></select><button class="primary-button" id="archiveSearchButton">Найти</button></div><div id="archiveSearchResult" class="archive-result"></div></article>
+        </section>
+
+        <section class="page" id="page-users">
+          <div class="page-heading-row"><div><span class="eyebrow">Администрирование</span><h1>Пользователи и права</h1><p>Должности, отделы, школы, разрешения и временное замещение сотрудников.</p></div><button class="primary-button" id="addUserButton">+ Добавить пользователя</button></div>
+          <div class="permission-overview" id="permissionOverview"></div>
+          <div class="panel table-panel">
+            <div class="panel-head"><div><span class="eyebrow">Учётные записи</span><h3>Пользователи системы</h3></div><div class="table-tools"><input id="userSearch" placeholder="Имя, роль, отдел или школа" /><select id="userRoleFilter"><option value="all">Все роли</option></select></div></div>
+            <div class="responsive-table"><table><thead><tr><th>Пользователь</th><th>Должность</th><th>Подразделение</th><th>Последний вход</th><th>Статус</th><th>Действия</th></tr></thead><tbody id="usersTableBody"></tbody></table></div>
+          </div>
+        </section>
+
+        <section class="page" id="page-audit">
+          <div class="page-heading-row"><div><span class="eyebrow">Безопасность и прозрачность</span><h1>Журнал действий</h1><p>Кто, когда и что сделал: входы, изменения, отправки, проверки и ручная корректировка рейтинга.</p></div><button class="secondary-button" id="exportAuditButton">⇩ Экспорт журнала</button></div>
+          <div class="audit-summary" id="auditSummary"></div>
+          <div class="panel table-panel">
+            <div class="panel-head"><div><span class="eyebrow">История</span><h3>Последние действия</h3></div><div class="table-tools"><input id="auditSearch" placeholder="Пользователь, действие или объект" /><select id="auditTypeFilter"><option value="all">Все действия</option><option value="task">Поручения</option><option value="submission">Отчёты школ</option><option value="rating">Рейтинг</option><option value="security">Вход и доступ</option></select></div></div>
+            <div class="responsive-table"><table><thead><tr><th>Время</th><th>Пользователь</th><th>Действие</th><th>Объект</th><th>Тип</th><th>IP / устройство</th></tr></thead><tbody id="auditTableBody"></tbody></table></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="taskModal">
+    <div class="modal wide-modal glass-card">
+      <div class="modal-head"><div><span class="eyebrow">Новое поручение</span><h2>Создать поручение</h2></div><button class="round-button" data-close-modal="taskModal">×</button></div>
+      <form id="taskForm">
+        <div class="step-strip"><span class="active">1. Основное</span><span>2. Получатели</span><span>3. Форма ответа</span><span>4. Согласование</span></div>
+        <div class="form-grid">
+          <label class="full-field">Название поручения<input id="newTaskTitle" required maxlength="120" placeholder="Например: Свод по результатам ГИА" /></label>
+          <label>Ответственный отдел<select id="newTaskDirection" required></select></label>
+          <label>Приоритет<select id="newTaskPriority"><option>Обычное</option><option>Важное</option><option>Срочное</option><option>Критическое</option></select></label>
+          <label>Дата окончания<input id="newTaskDate" type="date" value="2026-07-24" required /></label>
+          <label>Время<input id="newTaskTime" type="time" value="14:00" required /></label>
+          <label class="full-field">Описание<textarea id="newTaskDescription" rows="4" placeholder="Что необходимо выполнить, какие показатели заполнить и какие документы приложить"></textarea></label>
+          <label>Получатели<select id="newTaskRecipients"><option value="all">Все школы района (34)</option><option value="city">Городские школы</option><option value="rural">Сельские школы</option><option value="selected">Выбрать школы вручную</option></select></label>
+          <label>Формат ответа<select id="newTaskResponseType"><option>Форма + файлы</option><option>Только структурированная форма</option><option>Загрузка Excel / Word / PDF</option><option>Фотоотчёт</option><option>Да / Нет + комментарий</option></select></label>
+          <label>Подтверждение директора<select id="newTaskDirectorApproval"><option value="yes">Обязательно</option><option value="no">Не требуется</option></select></label>
+          <label>Повторение<select id="newTaskRepeat"><option>Не повторять</option><option>Еженедельно</option><option>Ежемесячно</option><option>Ежеквартально</option></select></label>
+          <label>Вес в рейтинге<select id="newTaskWeight"><option value="1">Обычный ×1</option><option value="1.25">Важный ×1,25</option><option value="1.5">Срочный ×1,5</option><option value="2">Критический ×2</option></select></label>
+          <label>Маршрут согласования<select id="newTaskApprovalRoute"><option value="auto">Автоматически по должности</option><option value="deputy">Через заместителя начальника</option><option value="chief">Только начальником РОО</option><option value="none">Без дополнительного согласования</option></select></label>
+          <div class="full-field form-builder">
+            <div class="form-builder-head"><div><span>Поля формы ответа</span><small>Школы заполняют одинаковые поля, система автоматически строит свод.</small></div><button type="button" class="secondary-button small" id="addFormFieldButton">+ Добавить поле</button></div>
+            <div id="formFieldList" class="form-field-list"></div>
+          </div>
+          <div class="full-field reminder-settings">
+            <span>Автоматические напоминания</span>
+            <label class="checkbox-line"><input type="checkbox" checked value="24h" /> За 24 часа</label>
+            <label class="checkbox-line"><input type="checkbox" checked value="3h" /> За 3 часа</label>
+            <label class="checkbox-line"><input type="checkbox" checked value="30m" /> За 30 минут</label>
+            <label class="checkbox-line"><input type="checkbox" checked value="overdue" /> Сразу после просрочки</label>
+          </div>
+        </div>
+        <div class="modal-hint" id="taskPermissionHint"></div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal="taskModal">Отмена</button><button type="submit" class="primary-button" id="taskSubmitButton">Создать и отправить</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="schoolModal">
+    <div class="modal glass-card">
+      <div class="modal-head"><div><span class="eyebrow">Карточка организации</span><h2 id="schoolModalTitle">Школа</h2></div><button class="round-button" data-close-modal="schoolModal">×</button></div>
+      <div id="schoolModalContent"></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="userModal">
+    <div class="modal glass-card">
+      <div class="modal-head"><div><span class="eyebrow">Новая учётная запись</span><h2>Добавить пользователя</h2></div><button class="round-button" data-close-modal="userModal">×</button></div>
+      <form id="userForm" class="form-grid">
+        <label class="full-field">Ф.И.О.<input id="newUserName" required placeholder="Фамилия Имя Отчество" /></label>
+        <label>Роль<select id="newUserRole"></select></label>
+        <label>Отдел / школа<select id="newUserUnit"></select></label>
+        <label class="full-field">Электронная почта<input id="newUserEmail" type="email" required placeholder="user@achkhoy-edu.ru" /></label>
+        <div class="modal-actions full-field"><button type="button" class="secondary-button" data-close-modal="userModal">Отмена</button><button class="primary-button" type="submit">Создать аккаунт</button></div>
+      </form>
+    </div>
+  </div>
+
+  <aside class="task-drawer hidden" id="taskDrawer">
+    <div class="drawer-head"><div><span class="eyebrow">Карточка поручения</span><h2 id="drawerTaskTitle">Поручение</h2></div><button class="round-button" id="closeTaskDrawer">×</button></div>
+    <div id="taskDrawerContent" class="drawer-content"></div>
+  </aside>
+  <div class="drawer-overlay hidden" id="drawerOverlay"></div>
+
+
+  <div class="modal-backdrop hidden" id="submissionModal">
+    <div class="modal glass-card submission-modal">
+      <div class="modal-head">
+        <div><span class="eyebrow">Выполнение поручения</span><h2 id="submissionModalTitle">Заполнить отчёт</h2></div>
+        <button class="round-button" data-close-modal="submissionModal">×</button>
+      </div>
+      <div class="submission-modal-body">
+        <div class="submission-meta" id="submissionModalMeta"></div>
+        <div class="submission-progress">
+          <div class="submission-progress-head"><strong>Готовность формы</strong><b id="submissionProgressValue">0%</b></div>
+          <div class="submission-progress-track"><i id="submissionProgressBar"></i></div>
+          <small id="submissionProgressText">Заполнено 0 обязательных полей</small>
+        </div>
+        <div class="submission-returned hidden" id="submissionReturnedNotice"><b>Отчёт возвращён:</b><span id="submissionReturnedText"></span></div>
+        <div class="submission-validation hidden" id="submissionValidation"></div>
+        <div class="submission-fields-grid" id="submissionFields"></div>
+        <section class="submission-section">
+          <h4>Дополнительные документы</h4>
+          <p>Можно приложить несколько файлов общим размером до 15 МБ каждый.</p>
+          <input class="hidden" id="submissionAttachmentInput" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.jpg,.jpeg,.png,.webp" />
+          <div class="submission-dropzone" id="submissionDropzone"><span>⇧</span><div><strong>Нажмите или перетащите файлы</strong><small>PDF, Word, Excel, JPG, PNG</small></div></div>
+          <div class="uploaded-files" id="submissionAttachmentList"></div>
+        </section>
+        <section class="submission-section">
+          <h4>Комментарий к отчёту</h4>
+          <textarea class="submission-comment" id="submissionComment" rows="4" placeholder="Укажите пояснения, особенности или дополнительную информацию"></textarea>
+        </section>
+        <div class="submission-messages hidden" id="submissionMessages"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="secondary-button" data-close-modal="submissionModal">Закрыть</button>
+        <button type="button" class="secondary-button" id="submissionSaveDraftButton">Сохранить черновик</button>
+        <button type="button" class="primary-button" id="submissionSubmitButton">Отправить директору</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="reviewSubmissionModal">
+    <div class="modal glass-card review-submission-modal">
+      <div class="modal-head">
+        <div><span class="eyebrow">Отчёт образовательной организации</span><h2 id="reviewSubmissionTitle">Проверка отчёта</h2></div>
+        <button class="round-button" data-close-modal="reviewSubmissionModal">×</button>
+      </div>
+      <div class="review-submission-scroll">
+        <div id="reviewSubmissionContent"></div>
+        <div class="review-comment-wrap" id="reviewCommentWrap">
+          <label><span id="reviewCommentLabel">Комментарий проверяющего</span><textarea id="reviewSubmissionComment" rows="4" placeholder="Комментарий, подтверждение или замечание"></textarea></label>
+        </div>
+      </div>
+      <div class="modal-actions" id="reviewSubmissionActions"></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="infoModal">
+    <div class="modal glass-card">
+      <div class="modal-head"><div><span class="eyebrow" id="infoModalEyebrow">Информация</span><h2 id="infoModalTitle">Заголовок</h2></div><button class="round-button" data-close-modal="infoModal">×</button></div>
+      <div id="infoModalContent" class="info-modal-content"></div>
+      <div class="modal-actions"><button class="primary-button" data-close-modal="infoModal">Понятно</button></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="commandModal">
+    <div class="command-palette glass-card"><div class="command-input-row"><span>⌕</span><input id="commandSearchInput" placeholder="Введите команду, название раздела, школы или поручения" /><kbd>ESC</kbd></div><div class="command-hint">Быстрые команды: «просроченные», «новое поручение», «рейтинг», «СОШ №1», «проверки»</div><div id="commandResults" class="command-results"></div></div>
+  </div>
+  <div class="system-update-banner" id="systemUpdateBanner"><div><span class="update-pulse"></span><strong>Система обновлена до V7</strong><small>Добавлены анализ ЕГЭ, ОГЭ и ГИА, пофамильные результаты, графики и контроль активности отделов РОО.</small></div><button id="dismissUpdateButton">Понятно</button></div>
+  <button class="presentation-exit hidden" id="presentationExitButton">Выйти из режима экрана</button>
+  <div class="toast" id="toast"></div>
+
+  <button id="visualEditorFab" class="v6-editor-fab hidden" title="Открыть визуальный редактор"><span>✦</span><b>Дизайн</b></button>
+
+  <aside id="visualEditorPanel" class="v6-editor-panel hidden" aria-label="Визуальный редактор сайта">
+    <div class="v6-editor-head">
+      <div><span>Редактор сайта</span><h2>Дизайн без кода</h2></div>
+      <button id="closeVisualEditor" aria-label="Закрыть">×</button>
+    </div>
+    <div class="v6-editor-save-state"><i></i><span id="v6SaveState">Все изменения сохранены</span></div>
+    <div class="v6-editor-tabs">
+      <button class="active" data-v6-tab="global">Весь сайт</button>
+      <button data-v6-tab="element">Выбранный блок</button>
+      <button data-v6-tab="themes">Темы</button>
+      <button data-v6-tab="transfer">Перенос</button>
+    </div>
+
+    <div class="v6-editor-body">
+      <section class="v6-editor-tab active" data-v6-panel="global">
+        <div class="v6-editor-tip"><b>Общее оформление</b><span>Эти настройки меняют весь сайт сразу.</span></div>
+        <label>Основной шрифт
+          <select id="v6GlobalFont">
+            <option value="Inter, Segoe UI, Arial, sans-serif">Inter / Segoe UI</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+            <option value="Tahoma, sans-serif">Tahoma</option>
+            <option value="'Times New Roman', serif">Times New Roman</option>
+          </select>
+        </label>
+        <label class="v6-range-label"><span>Размер текста <b id="v6BaseFontValue">100%</b></span><input id="v6BaseFont" type="range" min="80" max="135" step="1" value="100"></label>
+        <div class="v6-color-grid">
+          <label>Главный цвет<input id="v6PrimaryColor" type="color"></label>
+          <label>Доп. цвет<input id="v6SecondaryColor" type="color"></label>
+          <label>Фон сайта<input id="v6PageColor" type="color"></label>
+          <label>Цвет карточек<input id="v6SurfaceColor" type="color"></label>
+          <label>Основной текст<input id="v6TextColor" type="color"></label>
+          <label>Вторичный текст<input id="v6MutedColor" type="color"></label>
+          <label>Границы<input id="v6BorderColor" type="color"></label>
+          <label>Меню<input id="v6SidebarColor" type="color"></label>
+        </div>
+        <label class="v6-range-label"><span>Скругление блоков <b id="v6RadiusValue">20 px</b></span><input id="v6Radius" type="range" min="0" max="42" value="20"></label>
+        <label class="v6-range-label"><span>Сила теней <b id="v6ShadowValue">35%</b></span><input id="v6Shadow" type="range" min="0" max="100" value="35"></label>
+        <label class="v6-range-label"><span>Прозрачность карточек <b id="v6SurfaceOpacityValue">94%</b></span><input id="v6SurfaceOpacity" type="range" min="55" max="100" value="94"></label>
+        <label>Плотность интерфейса<select id="v6Density"><option value="compact">Компактная</option><option value="comfortable" selected>Удобная</option><option value="spacious">Просторная</option></select></label>
+        <div class="v6-editor-group">
+          <div class="v6-group-title">Фон сайта</div>
+          <label>Ссылка на изображение<input id="v6BackgroundUrl" placeholder="https://... или оставьте пустым"></label>
+          <div class="v6-inline-buttons"><button id="v6UploadBackground">Загрузить фото</button><button id="v6ClearBackground">Убрать фото</button></div>
+          <input id="v6BackgroundFile" class="hidden" type="file" accept="image/*">
+          <label class="v6-range-label"><span>Видимость фонового фото <b id="v6BackgroundOpacityValue">22%</b></span><input id="v6BackgroundOpacity" type="range" min="0" max="100" value="22"></label>
+        </div>
+        <div class="v6-editor-group">
+          <div class="v6-group-title">Шапка и меню</div>
+          <label class="v6-range-label"><span>Ширина меню <b id="v6SidebarWidthValue">230 px</b></span><input id="v6SidebarWidth" type="range" min="190" max="340" value="230"></label>
+          <label class="v6-range-label"><span>Высота шапки <b id="v6HeaderHeightValue">78 px</b></span><input id="v6HeaderHeight" type="range" min="60" max="110" value="78"></label>
+        </div>
+      </section>
+
+      <section class="v6-editor-tab" data-v6-panel="element">
+        <div class="v6-editor-tip v6-select-tip"><b id="v6SelectedName">Ничего не выбрано</b><span id="v6SelectedPath">Включите выбор и нажмите на нужный блок или текст.</span><small id="v11SelectedKeyStatus" style="display:block;margin-top:5px;color:#718077;word-break:break-all">Изменения сохраняются автоматически.</small></div>
+        <button id="v6SelectMode" class="v6-select-mode"><span>◎</span> Выбрать элемент на странице</button>
+        <div id="v6ElementControls" class="v6-element-controls is-disabled">
+          <label>Текст или подпись<textarea id="v6ElementText" rows="3" placeholder="Выберите отдельную надпись"></textarea><small id="v6TextHint">Для сложного блока выберите конкретную надпись внутри него.</small></label>
+          <div class="v6-inline-buttons"><button id="v6TextApply">Применить текст</button><button id="v6TextRestore">Вернуть текст</button></div>
+          <label>Шрифт<select id="v6ElementFont"><option value="">Как на сайте</option><option value="Inter, Segoe UI, Arial, sans-serif">Inter</option><option value="Arial, sans-serif">Arial</option><option value="Georgia, serif">Georgia</option><option value="Verdana, sans-serif">Verdana</option><option value="'Times New Roman', serif">Times New Roman</option></select></label>
+          <div class="v6-two-cols"><label>Размер<input id="v6ElementFontSize" type="number" min="8" max="120" placeholder="px"></label><label>Толщина<select id="v6ElementWeight"><option value="">По умолчанию</option><option value="300">Тонкий</option><option value="400">Обычный</option><option value="500">Средний</option><option value="600">Полужирный</option><option value="700">Жирный</option><option value="800">Очень жирный</option></select></label></div>
+          <div class="v6-color-grid">
+            <label>Текст<input id="v6ElementColor" type="color"></label>
+            <label>Фон<input id="v6ElementBackground" type="color"></label>
+            <label>Граница<input id="v6ElementBorder" type="color"></label>
+          </div>
+          <div class="v6-two-cols"><label>Скругление<input id="v6ElementRadius" type="number" min="0" max="100" placeholder="px"></label><label>Прозрачность<input id="v6ElementOpacity" type="number" min="0" max="100" placeholder="%"></label></div>
+          <div class="v6-two-cols"><label>Внутренний отступ<input id="v6ElementPadding" placeholder="например 20px"></label><label>Внешний отступ<input id="v6ElementMargin" placeholder="например 10px 0"></label></div>
+          <div class="v6-two-cols"><label>Ширина<input id="v6ElementWidth" placeholder="auto, 100%, 420px"></label><label>Мин. высота<input id="v6ElementMinHeight" placeholder="auto или 120px"></label></div>
+          <div class="v6-two-cols"><label>Высота строки<input id="v6ElementLineHeight" placeholder="например 1.5"></label><label>Интервал букв<input id="v6ElementLetterSpacing" placeholder="например 0.5px"></label></div>
+          <label>Выравнивание<select id="v6ElementAlign"><option value="">По умолчанию</option><option value="left">Слева</option><option value="center">По центру</option><option value="right">Справа</option></select></label>
+          <label>Тень<select id="v6ElementShadow"><option value="">По умолчанию</option><option value="none">Без тени</option><option value="0 5px 14px rgba(23,69,38,.08)">Лёгкая</option><option value="0 14px 35px rgba(23,69,38,.16)">Средняя</option><option value="0 22px 55px rgba(23,69,38,.25)">Сильная</option></select></label>
+          <div class="v6-editor-group">
+            <div class="v6-group-title">Фон выбранного блока</div>
+            <label>Ссылка на изображение<input id="v6ElementBgUrl" placeholder="https://..."></label>
+            <div class="v6-inline-buttons"><button id="v6UploadElementBg">Загрузить фото</button><button id="v6ClearElementBg">Убрать фото</button></div>
+            <input id="v6ElementBgFile" class="hidden" type="file" accept="image/*">
+          </div>
+          <div id="v6ImageControls" class="v6-editor-group hidden">
+            <div class="v6-group-title">Выбранное изображение</div>
+            <label>Ссылка на изображение<input id="v6ImageUrl" placeholder="https://..."></label>
+            <button id="v6UploadImage">Заменить изображение</button><input id="v6ImageFile" class="hidden" type="file" accept="image/*">
+          </div>
+          <label class="v6-checkbox"><input id="v6ElementHidden" type="checkbox"> Скрыть этот элемент</label>
+          <div class="v6-inline-buttons"><button id="v6ApplyElement" class="primary">Применить</button><button id="v6ResetElement">Сбросить блок</button></div>
+        </div>
+      </section>
+
+      <section class="v6-editor-tab" data-v6-panel="themes">
+        <div class="v6-editor-tip"><b>Готовые темы</b><span>Выберите основу, затем измените любые детали.</span></div>
+        <div id="v6ThemePresets" class="v6-theme-presets"></div>
+        <div class="v6-editor-group"><div class="v6-group-title">Сохранить свою тему</div><label>Название темы<input id="v6ThemeName" placeholder="Например: Официальная зелёная"></label><button id="v6SaveTheme" class="primary">Сохранить текущую тему</button></div>
+        <div id="v6CustomThemes" class="v6-custom-themes"></div>
+      </section>
+
+      <section class="v6-editor-tab" data-v6-panel="transfer">
+        <div class="v6-editor-tip"><b>Перенос и резервная копия</b><span>Скачайте оформление и загрузите его на другом компьютере.</span></div>
+        <button id="v6ExportSettings" class="v6-transfer-button"><span>⇩</span><div><b>Скачать настройки</b><small>JSON-файл со всеми цветами, текстами и блоками</small></div></button>
+        <button id="v6ImportSettings" class="v6-transfer-button"><span>⇧</span><div><b>Загрузить настройки</b><small>Восстановить ранее сохранённое оформление</small></div></button>
+        <input id="v6ImportFile" class="hidden" type="file" accept="application/json,.json">
+        <button id="v6ResetAll" class="v6-danger-button">Сбросить всё оформление и тексты</button>
+        <div class="v6-editor-group"><div class="v6-group-title">Что сохраняется</div><ul class="v6-check-list"><li>Общие шрифты и размеры</li><li>Все цвета и фоновые изображения</li><li>Оформление каждого выбранного блока</li><li>Изменённые надписи и заголовки</li><li>Собственные темы оформления</li></ul></div>
+      </section>
+    </div>
+    <div class="v6-editor-footer"><button id="v6Undo">↶ Отменить</button><button id="v6Redo">↷ Повторить</button><button id="v6Done" class="primary">Готово</button></div>
+  </aside>
+  <div id="v6EditorShade" class="v6-editor-shade hidden"></div>
+  <style id="v6ElementOverrides"></style>
+
+  <script src="app.js"></script>
+  <script src="v3.js"></script>
+  <script src="v4.js"></script>
+  <script src="v5.js"></script>
+  <script src="v7.js"></script>
+  <script src="v6.js"></script>
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="online.js"></script>
+</body>
+</html>

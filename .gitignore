@@ -1,0 +1,22 @@
+# Local/editor files
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+*.bak
+.vscode/
+.idea/
+
+# Local deployment metadata
+.vercel/
+
+# Never commit secrets if added later
+.env
+.env.*
+!.env.example
+*service_role*
+*sb_secret_*
+
+# Archives/build leftovers
+*.zip
+_BACKUP/
