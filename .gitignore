@@ -1,22 +1,3 @@
-# Local/editor files
-.DS_Store
-Thumbs.db
-*.tmp
 *.log
-*.bak
-.vscode/
-.idea/
-
-# Never commit secrets if added later
-.env
-.env.*
-!.env.example
-*service_role*
-*sb_secret_*
-
-# Local build and archives
-_site/
-*.zip
-_BACKUP/
-SITE_URL.txt
-ПОСЛЕДНИЙ_ШАГ_SUPABASE.txt
+.tmp/
+.DS_Store
