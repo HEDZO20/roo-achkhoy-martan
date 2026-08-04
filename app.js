@@ -135,10 +135,22 @@
       if (!image || !mark) return;
       const fallback = $('.brand-fallback', mark);
       if (logoUrl) {
+        // Не прячем запасной знак до успешной загрузки файла.
+        // Так битая или удалённая ссылка не показывает значок сломанного изображения.
+        image.hidden = true;
+        if (fallback) fallback.hidden = false;
+        image.onload = () => {
+          image.hidden = false;
+          if (fallback) fallback.hidden = true;
+        };
+        image.onerror = () => {
+          image.hidden = true;
+          if (fallback) fallback.hidden = false;
+        };
         image.src = logoUrl;
-        image.hidden = false;
-        if (fallback) fallback.hidden = true;
       } else {
+        image.onload = null;
+        image.onerror = null;
         image.removeAttribute('src');
         image.hidden = true;
         if (fallback) fallback.hidden = false;
@@ -174,9 +186,34 @@
         email: $('#loginEmail').value.trim(),
         password: $('#loginPassword').value
       });
-      if (error) return toast(error.message);
+      if (error) {
+        const message = String(error.message || 'Ошибка входа');
+        if (/invalid login credentials/i.test(message)) {
+          return toast('Неверная почта или пароль. Проверьте аккаунт либо нажмите «Забыли пароль?».', 5500);
+        }
+        if (/email not confirmed/i.test(message)) {
+          return toast('Почта ещё не подтверждена. Откройте письмо Supabase и подтвердите регистрацию.', 5500);
+        }
+        return toast(message);
+      }
       location.reload();
     };
+
+    const forgotPassword = $('#forgotPassword');
+    if (forgotPassword) {
+      forgotPassword.onclick = async () => {
+        const email = $('#loginEmail').value.trim();
+        if (!email) return toast('Сначала укажите рабочую почту.');
+        const redirectTo = `${location.origin}${location.pathname}`;
+        const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+        if (error) return toast(error.message || 'Не удалось отправить письмо', 5000);
+        toast('Письмо для смены пароля отправлено. Проверьте входящие и папку «Спам».', 6000);
+      };
+    }
+
+    sb.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') openPasswordRecoveryModal();
+    });
 
     $('#registerForm').onsubmit = async (event) => {
       event.preventDefault();
@@ -206,6 +243,33 @@
       location.reload();
     };
     $('#menuBtn').onclick = () => $('.sidebar').classList.toggle('open');
+  }
+
+  function openPasswordRecoveryModal() {
+    showAuth();
+    modal(`<h2>Установите новый пароль</h2>
+      <p class="hint">Пароль должен содержать не менее 8 символов.</p>
+      <label>Новый пароль<input id="recoveryPassword" type="password" minlength="8" autocomplete="new-password"></label>
+      <label>Повторите пароль<input id="recoveryPassword2" type="password" minlength="8" autocomplete="new-password"></label>
+      <button id="saveRecoveryPassword" type="button" class="primary">Сохранить пароль</button>`);
+    window.setTimeout(() => {
+      const button = $('#saveRecoveryPassword');
+      if (!button) return;
+      button.onclick = async () => {
+        const first = $('#recoveryPassword').value;
+        const second = $('#recoveryPassword2').value;
+        if (first.length < 8) return toast('Минимальная длина пароля — 8 символов.');
+        if (first !== second) return toast('Пароли не совпадают.');
+        button.disabled = true;
+        const { error } = await sb.auth.updateUser({ password: first });
+        button.disabled = false;
+        if (error) return toast(error.message || 'Не удалось изменить пароль', 5000);
+        closeModal();
+        toast('Пароль изменён. Теперь можно войти.', 5000);
+        await sb.auth.signOut();
+        showAuth();
+      };
+    }, 0);
   }
 
   async function loadUnitsForRegister() {
