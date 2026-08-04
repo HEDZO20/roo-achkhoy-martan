@@ -359,16 +359,21 @@ E.renderDashboard = function(a){
   const source=a.tables.map(rawTable).join('');
 
   return `<article class="analysis-document"><div class="analysis-doc-head"><div><span class="analysis-file-tag">${esc(a.meta.examType||'ГИА')}</span><h2>${esc(a.meta.title)}</h2><p>${esc(a.meta.fileName)} · ${esc(a.meta.academicYear)} · ${new Date(a.meta.createdAt).toLocaleString('ru-RU')}</p></div><div class="analysis-doc-score"><b>${Math.max(0,100-Math.min(70,a.warnings.length*2))}%</b><small>качество распознавания</small></div></div>
-  <div class="analysis-tabs"><button class="active" data-analysis-tab="overview">Обзор</button><button data-analysis-tab="summary">Сводные данные</button><button data-analysis-tab="subjects">Предметы</button><button data-analysis-tab="schools">Школы</button><button data-analysis-tab="dynamics">Динамика</button><button data-analysis-tab="high">Высокие баллы</button><button data-analysis-tab="quality">Проверка данных</button><button data-analysis-tab="source">Исходные таблицы</button></div>
+  <div class="analysis-tabs"><button type="button" class="active" data-analysis-tab="overview">Обзор</button><button type="button" data-analysis-tab="summary">Сводные данные</button><button type="button" data-analysis-tab="subjects">Предметы</button><button type="button" data-analysis-tab="schools">Школы</button><button type="button" data-analysis-tab="dynamics">Динамика</button><button type="button" data-analysis-tab="high">Высокие баллы</button><button type="button" data-analysis-tab="quality">Проверка данных</button><button type="button" data-analysis-tab="source">Исходные таблицы</button></div>
   <section data-analysis-panel="overview">${overview}</section><section data-analysis-panel="summary" hidden>${summaryHtml}</section><section data-analysis-panel="subjects" hidden>${subjectHtml}</section><section data-analysis-panel="schools" hidden>${schoolHtml}</section><section data-analysis-panel="dynamics" hidden>${dynamics}</section><section data-analysis-panel="high" hidden>${high}</section><section data-analysis-panel="quality" hidden>${quality}</section><section data-analysis-panel="source" hidden>${source}</section></article>`;
 };
 
 E.bindDashboard = function(root){
   if(!root) return;
-  root.querySelectorAll('[data-analysis-tab]').forEach(btn=>btn.addEventListener('click',()=>{
-    root.querySelectorAll('[data-analysis-tab]').forEach(x=>x.classList.toggle('active',x===btn));
-    root.querySelectorAll('[data-analysis-panel]').forEach(p=>p.hidden=p.dataset.analysisPanel!==btn.dataset.analysisTab);
-  }));
+  root.querySelectorAll('[data-analysis-tab]').forEach(btn=>{
+    btn.type='button';
+    btn.addEventListener('click',(event)=>{
+      event.preventDefault();
+      event.stopPropagation();
+      root.querySelectorAll('[data-analysis-tab]').forEach(x=>x.classList.toggle('active',x===btn));
+      root.querySelectorAll('[data-analysis-panel]').forEach(p=>p.hidden=p.dataset.analysisPanel!==btn.dataset.analysisTab);
+    });
+  });
 };
 
 E.detectLogoBackground = async function(file){
