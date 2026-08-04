@@ -1,0 +1,24 @@
+V27 STATIC TEST REPORT
+
+Проверено автоматически:
+[OK] JavaScript проходит node --check.
+[OK] Все обязательные файлы GitHub Pages присутствуют.
+[OK] index.html подключает app.css, config.js, analysis-engine.js, docx-export.js и app.js версии 27.
+[OK] В модальном окне нет form method="dialog", поэтому вкладки анализа не отправляют форму.
+[OK] Кнопки вкладок анализатора имеют type="button".
+[OK] CSS содержит [hidden]{display:none!important}.
+[OK] SQL использует CREATE TABLE IF NOT EXISTS и ADD COLUMN IF NOT EXISTS.
+[OK] SQL не содержит DROP TABLE и не удаляет данные V26.
+[OK] Установщик создаёт резервную ветку GitHub перед публикацией.
+[OK] Workflow публикует только публичные файлы сайта.
+
+Требует проверки в реальном Supabase:
+- выполнение PATCH_V27_FULL_RESTORE.sql;
+- RLS для каждой роли;
+- загрузка и скачивание файлов Storage;
+- полный маршрут поручения на двух школьных аккаунтах;
+- отправка писем восстановления пароля;
+- импорт реального DOCX/XLSX в браузере;
+- корректность старых данных, оставшихся в legacy_20260804.
+
+Эта сборка не объявляется полностью production-ready до прохождения ролевого теста в реальном проекте.

@@ -1,1015 +1,266 @@
 (() => {
-  'use strict';
+'use strict';
 
-  const C = window.ROO_CONFIG || {};
-  const E = window.ROOAnalysisEngine;
-  let sb = null;
-  let me = null;
-  let currentPage = 'dashboard';
-  let schools = [];
-  let departments = [];
-  let analysisDocuments = [];
-  let currentAnalysis = null;
-  let pendingAnalysis = null;
-  let pendingAnalysisFile = null;
-  let pendingBrandFile = null;
-  let branding = {
-    logo_url: '',
-    background: '#ffffff',
-    padding: 8,
-    short_name: 'Ачхой-Мартан',
-    subtitle: 'Отдел образования',
-    full_name: 'Отдел образования Ачхой-Мартановского района'
-  };
+const $ = (s,r=document) => r.querySelector(s);
+const $$ = (s,r=document) => [...r.querySelectorAll(s)];
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtDate = (v,withTime=false) => v ? new Date(v).toLocaleString('ru-RU',withTime?{}:{year:'numeric',month:'2-digit',day:'2-digit'}) : '—';
+const isoLocal = (d) => { const x=new Date(d); x.setMinutes(x.getMinutes()-x.getTimezoneOffset()); return x.toISOString().slice(0,16); };
+const fileSafe = (s) => String(s||'file').replace(/[^a-zа-я0-9._-]+/gi,'_');
+const download = (blob,name) => { const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); };
 
-  const $ = (selector, root = document) => root.querySelector(selector);
-  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[char]));
-  const safeFileName = (name) => String(name || 'document')
-    .normalize('NFKD')
-    .replace(/[^a-zA-Zа-яА-Я0-9._-]+/g, '_')
-    .replace(/_+/g, '_')
-    .slice(0, 120);
-  const fmtDate = (value, withTime = false) => value
-    ? new Date(value).toLocaleString('ru-RU', withTime ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' })
-    : '—';
+const ROLE_LABELS={pending:'Ожидает назначения',roo_head:'Начальник РОО',roo_deputy:'Заместитель начальника РОО',department_head:'Начальник отдела',department_staff:'Специалист отдела',school_director:'Директор школы',school_staff:'Сотрудник школы'};
+const STATUS_LABELS={new:'Новое',in_progress:'В работе',director_review:'На проверке директора',roo_review:'На проверке РОО',accepted:'Принято',returned:'Возвращено',cancelled:'Отменено',draft:'Черновик',submitted:'Отправлено',active:'Активен',pending:'Ожидает',blocked:'Заблокирован',planned:'Запланировано',held:'Проведено',completed:'Завершено',answered:'Ответ дан',closed:'Закрыто',approved:'Утверждено'};
+const PAGE_META={
+ dashboard:['Главная','⌂'],tasks:['Поручения','✓'],schools:['Школы','▦'],rating:['Рейтинг','★'],exams:['Анализ экзаменов','▥'],departments:['Работа отделов','◫'],reports:['Отчёты','▤'],calendar:['Календарь','◷'],documents:['Документы','▣'],appeals:['Обращения','✉'],meetings:['Совещания','◉'],inspections:['Проверки','⌕'],users:['Пользователи и роли','♙'],audit:['Журнал действий','≡'],settings:['Настройки','⚙'],school:['Моя школа','▦'],pending:['Ожидание доступа','…']
+};
+const ROLE_MENUS={
+ roo_head:['dashboard','tasks','schools','rating','exams','departments','reports','calendar','documents','appeals','meetings','inspections','users','audit','settings'],
+ roo_deputy:['dashboard','tasks','schools','rating','exams','departments','reports','calendar','documents','appeals','meetings','inspections','users','audit'],
+ department_head:['dashboard','tasks','schools','exams','departments','reports','calendar','documents','appeals','meetings','inspections'],
+ department_staff:['dashboard','tasks','exams','reports','calendar','documents','appeals','meetings','inspections'],
+ school_director:['dashboard','tasks','school','exams','reports','calendar','documents','appeals','inspections','users'],
+ school_staff:['dashboard','tasks','school','exams','calendar','documents'],
+ pending:['pending']
+};
 
-  const roleNames = {
-    pending: 'Ожидает назначения',
-    roo_head: 'Начальник РОО',
-    roo_deputy: 'Заместитель начальника РОО',
-    department_head: 'Начальник отдела',
-    department_staff: 'Специалист отдела',
-    school_director: 'Директор школы',
-    school_staff: 'Сотрудник школы'
-  };
-  const roleMenus = {
-    roo_head: ['dashboard', 'tasks', 'schools', 'exams', 'departments', 'reports', 'users', 'settings'],
-    roo_deputy: ['dashboard', 'tasks', 'schools', 'exams', 'departments', 'reports', 'users'],
-    department_head: ['dashboard', 'tasks', 'responses', 'exams', 'reports'],
-    department_staff: ['dashboard', 'tasks', 'responses', 'exams'],
-    school_director: ['dashboard', 'tasks', 'school', 'exams', 'reports', 'staff'],
-    school_staff: ['dashboard', 'tasks', 'school', 'exams'],
-    pending: ['pending']
-  };
-  const pages = {
-    dashboard: 'Главная', tasks: 'Поручения', schools: 'Школы', school: 'Моя школа',
-    exams: 'Анализ экзаменов', departments: 'Отделы', reports: 'Отчёты', users: 'Пользователи и роли',
-    settings: 'Настройки', responses: 'Ответы школ', staff: 'Сотрудники', pending: 'Ожидание доступа'
-  };
-  const analysisRoles = ['roo_head', 'roo_deputy', 'department_head', 'department_staff'];
-  const managerRoles = ['roo_head', 'roo_deputy'];
+let sb=null,session=null,me=null,currentPage='dashboard';
+let branding={logo_url:'',background:'#fff',padding:8,short_name:'Ачхой-Мартан',subtitle:'Отдел образования',full_name:'Отдел образования Ачхой-Мартановского района'};
+let cache={schools:null,departments:null,profiles:null,analysis:null};
 
-  function toast(text, timeout = 3200) {
-    const element = $('#toast');
-    if (!element) return;
-    element.textContent = text;
-    element.classList.add('show');
-    window.setTimeout(() => element.classList.remove('show'), timeout);
+function toast(text,kind='normal',timeout=3500){const el=$('#toast');el.textContent=text;el.style.background=kind==='error'?'#9e3030':kind==='warn'?'#865e09':'#173d2d';el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),timeout)}
+function badge(status){const cls=['returned','blocked','cancelled','closed'].includes(status)?'danger':['new','pending','planned','director_review','roo_review'].includes(status)?'warn':['accepted','active','completed','held','answered'].includes(status)?'success':'info';return `<span class="badge ${cls}">${esc(STATUS_LABELS[status]||status||'—')}</span>`}
+function empty(title,text,action=''){return `<div class="empty"><h3>${esc(title)}</h3><p>${esc(text)}</p>${action}</div>`}
+function modal(html,wide=true){$('#modalBody').innerHTML=html;$('.modal-box').classList.toggle('wide',wide);$('#modal').showModal()}
+function closeModal(){if($('#modal').open)$('#modal').close();$('#modalBody').innerHTML=''}
+function setBusy(btn,busy,text='Сохранение…'){if(!btn)return; if(busy){btn.dataset.old=btn.textContent;btn.textContent=text;btn.disabled=true}else{btn.textContent=btn.dataset.old||btn.textContent;btn.disabled=false}}
+function initials(name){return String(name||'РОО').trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'РОО'}
+function isRoo(){return ['roo_head','roo_deputy'].includes(me?.role)}
+function canCreateTasks(){return ['roo_head','roo_deputy','department_head'].includes(me?.role)}
+function canManageUsers(){return isRoo()||me?.role==='school_director'}
+function queryError(result){if(result?.error)throw result.error;return result?.data??result}
+async function audit(action,entityType,entityId,details={}){try{await sb.from('audit_log').insert({user_id:me?.id,action,entity_type:entityType,entity_id:String(entityId||''),details})}catch(_){}}
+
+async function boot(){
+  try{
+    const c=window.ROO_CONFIG||{};
+    if(!window.supabase)throw new Error('Библиотека Supabase не загрузилась. Проверьте интернет или доступ к CDN.');
+    if(!c.supabaseUrl||c.supabaseUrl.includes('YOUR-PROJECT'))throw new Error('Сайт не настроен: заполните config.js через установщик V27.');
+    sb=window.supabase.createClient(c.supabaseUrl,c.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    bindBase();await loadBranding();await loadRegisterUnits();
+    const {data}=await sb.auth.getSession(); session=data.session;
+    if(session) await enter(session.user); else showAuth();
+    sb.auth.onAuthStateChange(async(event,newSession)=>{session=newSession;if(event==='SIGNED_OUT')showAuth();});
+  }catch(e){console.error(e);showAuth();$('#loginMessage').textContent=e.message}
+}
+
+function bindBase(){
+  window.addEventListener('unhandledrejection',e=>{console.error(e.reason);toast(e.reason?.message||'Произошла ошибка','error')});
+  $('#modalClose').onclick=closeModal;
+  $('#modal').addEventListener('click',e=>{if(e.target===$('#modal'))closeModal()});
+  $('#menuBtn').onclick=()=>$('.sidebar').classList.toggle('open');
+  $('#logout').onclick=async()=>{await sb.auth.signOut();me=null;cache={schools:null,departments:null,profiles:null,analysis:null};showAuth()};
+  $('#notificationButton').onclick=showNotifications;
+  $$('.tab[data-auth]').forEach(btn=>btn.onclick=()=>{$$('.tab[data-auth]').forEach(x=>x.classList.toggle('active',x===btn));$('#loginForm').hidden=btn.dataset.auth!=='login';$('#registerForm').hidden=btn.dataset.auth!=='register'});
+  $('#loginForm').onsubmit=login;
+  $('#registerForm').onsubmit=register;
+  $('#forgotPassword').onclick=forgotPassword;
+}
+
+async function loadBranding(){
+  try{const r=await sb.from('site_settings').select('value').eq('key','branding').maybeSingle();if(!r.error&&r.data?.value)branding={...branding,...r.data.value}}catch(_){ }
+  applyBranding();
+}
+function applyBranding(){
+  $('#authBrandTitle').textContent=branding.full_name||branding.short_name;
+  $('#brandShortName').textContent=branding.short_name||'Ачхой-Мартан';$('#brandSubtitle').textContent=branding.subtitle||'Отдел образования';
+  document.title=branding.full_name||'Система РОО';
+  for(const [imgId,markId] of [['authBrandImage','authBrandMark'],['sideBrandImage','sideBrandMark']]){
+    const img=$(`#${imgId}`),mark=$(`#${markId}`),fallback=$('.brand-fallback',mark); mark.style.background=branding.background||'#fff';mark.style.padding=`${Number(branding.padding)||8}px`;
+    if(branding.logo_url){img.src=branding.logo_url;img.hidden=false;fallback.hidden=true;img.onerror=()=>{img.hidden=true;fallback.hidden=false}}else{img.hidden=true;fallback.hidden=false}
   }
-
-  function modal(html, wide = false) {
-    const dialog = $('#modal');
-    const body = $('#modalBody');
-    body.innerHTML = html;
-    dialog.querySelector('.modal-box')?.classList.toggle('wide', wide);
-    dialog.showModal();
-  }
-
-  function closeModal() {
-    if ($('#modal')?.open) $('#modal').close();
-  }
-
-  function empty(title, text, action = '') {
-    return `<div class="empty"><h3>${esc(title)}</h3><p>${esc(text)}</p>${action}</div>`;
-  }
-
-  function initClient() {
-    if (!window.supabase) throw new Error('Не загрузился модуль Supabase');
-    if (!C.supabaseUrl || !C.supabaseKey) throw new Error('Не настроены Project URL и Publishable key');
-    sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey);
-  }
-
-  async function boot() {
-    try {
-      initClient();
-      await loadBranding();
-      bindAuth();
-      const { data: { session } } = await sb.auth.getSession();
-      if (session) await enter(session.user);
-      else showAuth();
-    } catch (error) {
-      console.error(error);
-      applyBranding();
-      showAuth();
-      toast(error.message || 'Не удалось запустить сайт');
-    }
-  }
-
-  async function loadBranding() {
-    const local = localStorage.getItem('roo_branding_v26');
-    if (local) {
-      try { branding = { ...branding, ...JSON.parse(local) }; } catch (_) { /* ignored */ }
-    }
-    if (sb) {
-      try {
-        const { data, error } = await sb.from('site_settings').select('value').eq('key', 'branding').maybeSingle();
-        if (!error && data?.value) branding = { ...branding, ...data.value };
-      } catch (_) { /* V26 SQL may not be installed yet */ }
-    }
-    applyBranding();
-  }
-
-  function applyBranding() {
-    const logoUrl = branding.logo_url || '';
-    const background = branding.background || '#ffffff';
-    const padding = Number.isFinite(+branding.padding) ? Math.max(0, Math.min(28, +branding.padding)) : 8;
-    document.documentElement.style.setProperty('--logo-bg', background);
-    document.documentElement.style.setProperty('--logo-pad', `${padding}px`);
-
-    ['auth', 'side'].forEach((prefix) => {
-      const image = $(`#${prefix}BrandImage`);
-      const mark = $(`#${prefix}BrandMark`);
-      if (!image || !mark) return;
-      const fallback = $('.brand-fallback', mark);
-      if (logoUrl) {
-        // Не прячем запасной знак до успешной загрузки файла.
-        // Так битая или удалённая ссылка не показывает значок сломанного изображения.
-        image.hidden = true;
-        if (fallback) fallback.hidden = false;
-        image.onload = () => {
-          image.hidden = false;
-          if (fallback) fallback.hidden = true;
-        };
-        image.onerror = () => {
-          image.hidden = true;
-          if (fallback) fallback.hidden = false;
-        };
-        image.src = logoUrl;
-      } else {
-        image.onload = null;
-        image.onerror = null;
-        image.removeAttribute('src');
-        image.hidden = true;
-        if (fallback) fallback.hidden = false;
-      }
-      mark.style.setProperty('--logo-bg', background);
-      mark.style.setProperty('--logo-pad', `${padding}px`);
-    });
-
-    if ($('#brandShortName')) $('#brandShortName').textContent = branding.short_name || 'Ачхой-Мартан';
-    if ($('#brandSubtitle')) $('#brandSubtitle').textContent = branding.subtitle || 'Отдел образования';
-    if ($('#authBrandTitle')) $('#authBrandTitle').textContent = branding.full_name || 'Отдел образования Ачхой-Мартановского района';
-    document.title = branding.full_name || 'РОО Ачхой-Мартановского района';
-  }
-
-  function showAuth() {
-    const auth = $('#auth');
-    const app = $('#app');
-    if (auth) {
-      auth.hidden = false;
-      auth.style.display = 'grid';
-    }
-    if (app) {
-      app.hidden = true;
-      app.style.display = 'none';
-    }
-  }
-
-  function showApp() {
-    const auth = $('#auth');
-    const app = $('#app');
-    if (auth) {
-      auth.hidden = true;
-      auth.style.display = 'none';
-    }
-    if (app) {
-      app.hidden = false;
-      app.style.display = 'grid';
-    }
-  }
-
-  function setAuthStatus(text = '', type = 'info') {
-    const element = $('#loginStatus');
-    if (!element) return;
-    element.textContent = text;
-    element.hidden = !text;
-    element.style.color = type === 'error' ? '#a12b2b' : type === 'success' ? '#13795b' : '#5f6f68';
-  }
-
-  function bindAuth() {
-    $$('.tab').forEach((button) => {
-      button.onclick = async () => {
-        $$('.tab').forEach((item) => item.classList.toggle('active', item === button));
-        $('#loginForm').hidden = button.dataset.auth !== 'login';
-        $('#registerForm').hidden = button.dataset.auth !== 'register';
-        if (button.dataset.auth === 'register') await loadUnitsForRegister();
-      };
-    });
-
-    const loginForm = $('#loginForm');
-    loginForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const email = $('#loginEmail').value.trim();
-      const password = $('#loginPassword').value;
-      const button = $('#loginSubmit');
-      if (!email || !password) {
-        loginForm.reportValidity();
-        return;
-      }
-
-      button.disabled = true;
-      button.textContent = 'Входим…';
-      setAuthStatus('Проверяем почту и пароль…');
-
-      try {
-        const { data, error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) {
-          const message = String(error.message || 'Ошибка входа');
-          if (/invalid login credentials/i.test(message)) {
-            setAuthStatus('Неверная почта или пароль. Проверьте данные или восстановите пароль.', 'error');
-            toast('Неверная почта или пароль.', 5000);
-            return;
-          }
-          if (/email not confirmed/i.test(message)) {
-            setAuthStatus('Почта ещё не подтверждена. Откройте письмо Supabase.', 'error');
-            toast('Подтвердите почту через письмо Supabase.', 5500);
-            return;
-          }
-          setAuthStatus(message, 'error');
-          toast(message, 5000);
-          return;
-        }
-
-        const user = data?.user || data?.session?.user;
-        if (!user) throw new Error('Supabase подтвердил вход, но не вернул пользователя.');
-
-        // V26.3.5 repairs profiles for accounts that existed before the clean migration.
-        // A missing RPC does not block an already valid profile.
-        let repairError = null;
-        try {
-          const repair = await sb.rpc('ensure_my_profile');
-          repairError = repair.error || null;
-        } catch (error) {
-          repairError = error;
-        }
-
-        const entered = await enter(user, { quietMissing: true });
-        if (!entered) {
-          const detail = repairError?.message ? ` (${repairError.message})` : '';
-          setAuthStatus(`Вход подтверждён, но профиль сотрудника не создан. Выполните PATCH_V26_3_5_LOGIN_PROFILE.sql${detail}`, 'error');
-          toast('Вход подтверждён, но профиль сотрудника не найден.', 6500);
-          return;
-        }
-
-        setAuthStatus('Вход выполнен.', 'success');
-      } catch (error) {
-        console.error(error);
-        setAuthStatus(error.message || 'Не удалось выполнить вход.', 'error');
-        toast(error.message || 'Не удалось выполнить вход', 5500);
-      } finally {
-        button.disabled = false;
-        button.textContent = 'Войти';
-      }
-    });
-
-    const forgotPassword = $('#forgotPassword');
-    if (forgotPassword) {
-      forgotPassword.onclick = async () => {
-        const email = $('#loginEmail').value.trim();
-        if (!email) return toast('Сначала укажите рабочую почту.');
-        const redirectTo = `${location.origin}${location.pathname}`;
-        const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
-        if (error) return toast(error.message || 'Не удалось отправить письмо', 5000);
-        toast('Письмо для смены пароля отправлено. Проверьте входящие и папку «Спам».', 6000);
-      };
-    }
-
-    sb.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') openPasswordRecoveryModal();
-    });
-
-    $('#registerForm').onsubmit = async (event) => {
-      event.preventDefault();
-      const metadata = {
-        full_name: $('#regName').value.trim(),
-        phone: $('#regPhone').value.trim(),
-        place: $('#regPlace').value,
-        requested_unit_id: $('#regUnit').value || null
-      };
-      const { error } = await sb.auth.signUp({
-        email: $('#regEmail').value.trim(),
-        password: $('#regPassword').value,
-        options: { data: metadata }
-      });
-      if (error) {
-        const message = String(error.message || 'Ошибка регистрации');
-        if (/приглаш|administrator|admin/i.test(message)) {
-          return toast('На сервере осталась старая проверка приглашений. Выполните PATCH_V26_3_REMOVE_INVITE_GATE.sql.');
-        }
-        return toast(message);
-      }
-      modal('<h2>Заявка отправлена</h2><p>Подтвердите почту. После этого начальник РОО назначит вам роль и организацию.</p>');
-    };
-
-    $('#logout').onclick = async () => {
-      await sb.auth.signOut();
-      location.reload();
-    };
-    $('#menuBtn').onclick = () => $('.sidebar').classList.toggle('open');
-  }
-
-  function openPasswordRecoveryModal() {
-    showAuth();
-    modal(`<h2>Установите новый пароль</h2>
-      <p class="hint">Пароль должен содержать не менее 8 символов.</p>
-      <label>Новый пароль<input id="recoveryPassword" type="password" minlength="8" autocomplete="new-password"></label>
-      <label>Повторите пароль<input id="recoveryPassword2" type="password" minlength="8" autocomplete="new-password"></label>
-      <button id="saveRecoveryPassword" type="button" class="primary">Сохранить пароль</button>`);
-    window.setTimeout(() => {
-      const button = $('#saveRecoveryPassword');
-      if (!button) return;
-      button.onclick = async () => {
-        const first = $('#recoveryPassword').value;
-        const second = $('#recoveryPassword2').value;
-        if (first.length < 8) return toast('Минимальная длина пароля — 8 символов.');
-        if (first !== second) return toast('Пароли не совпадают.');
-        button.disabled = true;
-        const { error } = await sb.auth.updateUser({ password: first });
-        button.disabled = false;
-        if (error) return toast(error.message || 'Не удалось изменить пароль', 5000);
-        closeModal();
-        toast('Пароль изменён. Теперь можно войти.', 5000);
-        await sb.auth.signOut();
-        showAuth();
-      };
-    }, 0);
-  }
-
-  async function loadUnitsForRegister() {
-    try {
-      const [depResult, schoolResult] = await Promise.all([
-        sb.from('departments').select('id,name').order('name'),
-        sb.from('schools').select('id,short_name,name').order('name')
-      ]);
-      const list = [
-        ...(depResult.data || []).map((item) => ({ id: item.id, name: `РОО — ${item.name}` })),
-        ...(schoolResult.data || []).map((item) => ({ id: item.id, name: `Школа — ${item.short_name || item.name}` }))
-      ];
-      $('#regUnit').innerHTML = '<option value="">Организации нет в списке / выберу позже</option>' +
-        list.map((item) => `<option value="${item.id}">${esc(item.name)}</option>`).join('');
-    } catch (_) {
-      $('#regUnit').innerHTML = '<option value="">Организацию назначит начальник РОО</option>';
-    }
-  }
-
-  async function enter(user, options = {}) {
-    const { data, error } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
-    if (error || !data) {
-      showAuth();
-      if (!options.quietMissing) {
-        const detail = error?.message ? `: ${error.message}` : '';
-        setAuthStatus(`Вход подтверждён, но профиль сотрудника недоступен${detail}`, 'error');
-        toast('Профиль сотрудника не найден. Запустите исправление V26.3.5.', 6000);
-      }
-      return false;
-    }
-    me = data;
-    showApp();
-    $('#userName').textContent = me.full_name || user.email;
-    $('#userRole').textContent = roleNames[me.role] || 'Роль не назначена';
-    $('#avatar').textContent = (me.full_name || user.email).split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-    renderNav();
-    await navigate(roleMenus[me.role]?.[0] || 'pending');
-    return true;
-  }
-
-  function renderNav() {
-    const menu = roleMenus[me.role] || ['pending'];
-    $('#nav').innerHTML = menu.map((key) => `<button class="nav-btn" data-page="${key}">${pages[key]}</button>`).join('');
-    $$('.nav-btn').forEach((button) => { button.onclick = () => navigate(button.dataset.page); });
-  }
-
-  async function navigate(page) {
-    currentPage = page;
-    $$('.nav-btn').forEach((button) => button.classList.toggle('active', button.dataset.page === page));
-    $('#pageTitle').textContent = pages[page] || page;
-    $('#crumb').textContent = branding.short_name || 'Рабочая система РОО';
-    $('.sidebar').classList.remove('open');
-    const renderer = {
-      dashboard: renderDashboard,
-      pending: renderPending,
-      tasks: renderTasks,
-      responses: renderTasks,
-      schools: renderSchools,
-      school: renderMySchool,
-      exams: renderExams,
-      reports: renderReports,
-      users: renderUsers,
-      staff: renderUsers,
-      departments: renderDepartments,
-      settings: renderSettings
-    }[page] || renderDashboard;
-    try { await renderer(); } catch (error) {
-      console.error(error);
-      $('#content').innerHTML = empty('Раздел временно недоступен', error.message || 'Произошла ошибка загрузки');
-    }
-  }
-
-  async function countRows(table, modifier = (query) => query) {
-    try {
-      const result = await modifier(sb.from(table).select('id', { count: 'exact', head: true }));
-      return result.error ? 0 : (result.count || 0);
-    } catch (_) { return 0; }
-  }
-
-  async function renderDashboard() {
-    const [taskCount, schoolCount, documentCount, pendingCount] = await Promise.all([
-      countRows('tasks'),
-      countRows('schools'),
-      countRows('exam_documents'),
-      countRows('profiles', (query) => query.eq('role', 'pending'))
-    ]);
-    $('#content').innerHTML = `
-      <div class="grid cols-4">
-        <article class="panel stat"><b>${taskCount || '—'}</b><small>Поручения</small></article>
-        <article class="panel stat"><b>${schoolCount || '—'}</b><small>Школы</small></article>
-        <article class="panel stat"><b>${documentCount || '—'}</b><small>Аналитические документы</small></article>
-        <article class="panel stat"><b>${pendingCount || '—'}</b><small>Новые заявки</small></article>
-      </div>
-      <div class="grid cols-2" style="margin-top:18px">
-        <article class="panel"><h3>Что требует внимания</h3>${pendingCount
-          ? `<div class="notice">Новых пользователей без роли: <b>${pendingCount}</b></div>`
-          : empty('Нет срочных действий', 'Новые события появятся здесь.')}</article>
-        <article class="panel"><h3>Быстрый старт</h3><div class="actions">
-          <button class="secondary" data-go="tasks">Создать поручение</button>
-          <button class="secondary" data-go="exams">Проанализировать документ</button>
-          <button class="secondary" data-go="reports">Собрать отчёт</button>
-        </div></article>
-      </div>`;
-    $$('[data-go]').forEach((button) => { button.onclick = () => navigate(button.dataset.go); });
-  }
-
-  async function renderPending() {
-    $('#content').innerHTML = `<article class="panel">${empty(
-      'Заявка ожидает подтверждения',
-      'Начальник РОО должен назначить вам роль и организацию. После назначения выйдите и войдите снова.'
-    )}</article>`;
-  }
-
-  async function renderTasks() {
-    const { data, error } = await sb.from('tasks').select('id,title,description,status,due_at,created_at').order('created_at', { ascending: false }).limit(150);
-    if (error) throw error;
-    const rows = data || [];
-    const canCreate = ['roo_head', 'roo_deputy', 'department_head'].includes(me.role);
-    $('#content').innerHTML = `
-      <div class="toolbar"><div><h3>Поручения</h3><p class="hint">Создано → в работе → на проверке → принято.</p></div>
-      ${canCreate ? '<button id="newTask" class="primary">Новое поручение</button>' : ''}</div>
-      ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Поручение</th><th>Статус</th><th>Срок</th><th>Создано</th></tr></thead><tbody>${rows.map((row) => `
-        <tr><td><b>${esc(row.title)}</b><br><small>${esc(row.description || '')}</small></td><td><span class="badge">${esc(row.status || 'Новое')}</span></td><td>${fmtDate(row.due_at)}</td><td>${fmtDate(row.created_at)}</td></tr>`).join('')}</tbody></table></div>`
-        : empty('Поручений пока нет', 'Создайте первое поручение для отдела или школы.')}`;
-    if ($('#newTask')) $('#newTask').onclick = openTaskModal;
-  }
-
-  function openTaskModal() {
-    modal(`<h2>Новое поручение</h2>
-      <label>Название<input id="mTaskTitle" maxlength="180"></label>
-      <label>Описание<textarea id="mTaskDesc"></textarea></label>
-      <label>Срок<input id="mTaskDue" type="date"></label>
-      <button type="button" id="saveTask" class="primary">Создать</button>`);
-    $('#saveTask').onclick = saveTask;
-  }
-
-  async function saveTask() {
-    const title = $('#mTaskTitle').value.trim();
-    if (!title) return toast('Введите название');
-    const { error } = await sb.from('tasks').insert({
-      title,
-      description: $('#mTaskDesc').value.trim(),
-      due_at: $('#mTaskDue').value || null,
-      status: 'new',
-      created_by: me.id
-    });
-    if (error) return toast(error.message);
-    closeModal();
-    toast('Поручение создано');
-    await renderTasks();
-  }
-
-  function schoolPercent(school) {
-    const fields = ['name', 'short_name', 'address', 'locality', 'phone', 'email', 'director_name', 'students_total', 'classes_total', 'teachers_total', 'grade9_students', 'grade11_students'];
-    return Math.round(fields.filter((key) => school[key] !== null && school[key] !== '' && school[key] !== undefined).length / fields.length * 100);
-  }
-
-  async function loadSchools() {
-    const { data, error } = await sb.from('schools').select('*').order('name');
-    if (error) throw error;
-    schools = data || [];
-    return schools;
-  }
-
-  async function renderSchools() {
-    await loadSchools();
-    $('#content').innerHTML = `
-      <div class="toolbar"><div><h3>Школы</h3><p class="hint">Директор заполняет паспорт, начальник РОО проверяет сведения.</p></div>
-      ${managerRoles.includes(me.role) ? '<button id="addSchool" class="primary">Добавить школу</button>' : ''}</div>
-      ${schools.length ? `<div class="grid cols-3">${schools.map((school) => `
-        <article class="panel school-card" data-school="${school.id}"><h3>${esc(school.short_name || school.name)}</h3><p>${esc(school.locality || 'Населённый пункт не указан')}</p>
-          <div class="school-progress"><div class="ring" style="--p:${schoolPercent(school)}%"><b>${schoolPercent(school)}%</b></div><small>Заполнение паспорта</small></div>
-          <button class="secondary" style="margin-top:14px" data-edit-school="${school.id}">Открыть паспорт</button>
-        </article>`).join('')}</div>` : empty('Школы не добавлены', 'Добавьте справочник школ, затем назначайте директоров.')}`;
-    if ($('#addSchool')) $('#addSchool').onclick = () => openSchoolModal({});
-    $$('[data-edit-school]').forEach((button) => {
-      button.onclick = () => openSchoolModal(schools.find((item) => item.id === button.dataset.editSchool) || {});
-    });
-  }
-
-  async function renderMySchool() {
-    if (!me.school_id) {
-      $('#content').innerHTML = empty('Школа не назначена', 'Начальник РОО должен закрепить за вашей учётной записью школу.');
-      return;
-    }
-    const { data, error } = await sb.from('schools').select('*').eq('id', me.school_id).single();
-    if (error) throw error;
-    $('#content').innerHTML = `<div class="toolbar"><div><h3>${esc(data.short_name || data.name)}</h3><p class="hint">Заполнено ${schoolPercent(data)}%. После заполнения данные можно передать на проверку.</p></div><button id="editMySchool" class="primary">Заполнить паспорт</button></div>
-      <div class="grid cols-3"><article class="panel stat"><b>${data.students_total ?? '—'}</b><small>Учеников</small></article><article class="panel stat"><b>${data.teachers_total ?? '—'}</b><small>Педагогов</small></article><article class="panel stat"><b>${data.classes_total ?? '—'}</b><small>Классов</small></article></div>`;
-    $('#editMySchool').onclick = () => openSchoolModal(data, true);
-  }
-
-  function openSchoolModal(school = {}, own = false) {
-    const canSave = managerRoles.includes(me.role) || (own && me.role === 'school_director');
-    modal(`<h2>${school.id ? 'Паспорт школы' : 'Новая школа'}</h2>
-      <div class="wizard">
-        <div class="notice">Заполните сведения поэтапно. Поля можно сохранить как черновик.</div>
-        <div class="field-row"><label>Полное название<input id="sName" value="${esc(school.name || '')}"></label><label>Краткое название<input id="sShort" value="${esc(school.short_name || '')}"></label></div>
-        <div class="field-row"><label>Населённый пункт<input id="sLoc" value="${esc(school.locality || '')}"></label><label>Адрес<input id="sAddr" value="${esc(school.address || '')}"></label></div>
-        <div class="field-row"><label>Телефон<input id="sPhone" value="${esc(school.phone || '')}"></label><label>Почта<input id="sEmail" type="email" value="${esc(school.email || '')}"></label></div>
-        <label>Ф.И.О. директора<input id="sDirector" value="${esc(school.director_name || '')}"></label>
-        <div class="field-row"><label>Всего учеников<input id="sStudents" type="number" min="0" value="${school.students_total ?? ''}"></label><label>Всего классов<input id="sClasses" type="number" min="0" value="${school.classes_total ?? ''}"></label></div>
-        <div class="field-row"><label>Педагогов<input id="sTeachers" type="number" min="0" value="${school.teachers_total ?? ''}"></label><label>Количество смен<input id="sShifts" type="number" min="1" value="${school.shifts_count ?? ''}"></label></div>
-        <div class="field-row"><label>Выпускников 9 классов<input id="sGrade9" type="number" min="0" value="${school.grade9_students ?? ''}"></label><label>Выпускников 11 классов<input id="sGrade11" type="number" min="0" value="${school.grade11_students ?? ''}"></label></div>
-        <label>Проектная вместимость<input id="sCapacity" type="number" min="0" value="${school.capacity ?? ''}"></label>
-        ${canSave ? `<button type="button" id="saveSchool" class="primary">${school.id ? 'Сохранить паспорт' : 'Добавить школу'}</button>` : ''}
-      </div>`, true);
-    if ($('#saveSchool')) $('#saveSchool').onclick = () => saveSchool(school.id || null);
-  }
-
-  async function saveSchool(id) {
-    const numeric = (selector) => $('#'+selector).value === '' ? null : Number($('#'+selector).value);
-    const payload = {
-      name: $('#sName').value.trim(), short_name: $('#sShort').value.trim(), locality: $('#sLoc').value.trim(),
-      address: $('#sAddr').value.trim(), phone: $('#sPhone').value.trim(), email: $('#sEmail').value.trim(),
-      director_name: $('#sDirector').value.trim(), students_total: numeric('sStudents'), classes_total: numeric('sClasses'),
-      teachers_total: numeric('sTeachers'), shifts_count: numeric('sShifts'), grade9_students: numeric('sGrade9'),
-      grade11_students: numeric('sGrade11'), capacity: numeric('sCapacity'), updated_at: new Date().toISOString()
-    };
-    if (!payload.name) return toast('Введите полное название школы');
-    const query = id ? sb.from('schools').update(payload).eq('id', id) : sb.from('schools').insert(payload);
-    const { error } = await query;
-    if (error) return toast(error.message);
-    closeModal();
-    toast('Паспорт школы сохранён');
-    await navigate(currentPage);
-  }
-
-  async function loadDepartments() {
-    const { data, error } = await sb.from('departments').select('*').order('name');
-    if (error) throw error;
-    departments = data || [];
-    return departments;
-  }
-
-  async function renderDepartments() {
-    await loadDepartments();
-    $('#content').innerHTML = `<div class="toolbar"><div><h3>Отделы РОО</h3><p class="hint">Показатели появляются только при наличии реальных поручений и ответов.</p></div></div>
-      <div class="grid cols-3">${departments.map((dep) => `<article class="panel"><h3>${esc(dep.name)}</h3><p>${esc(dep.email || 'Почта не указана')}</p><div class="notice">Рейтинг: <b>—</b><br><small>Будет рассчитан после появления завершённых поручений.</small></div></article>`).join('')}</div>`;
-  }
-
-  async function renderUsers() {
-    if (!managerRoles.includes(me.role) && currentPage !== 'staff') {
-      $('#content').innerHTML = empty('Недостаточно прав', 'Назначать роли может начальник РОО или его заместитель.');
-      return;
-    }
-    let query = sb.from('profiles').select('id,email,full_name,phone,role,status,department_id,school_id,requested_unit_id,created_at').order('created_at', { ascending: false });
-    if (currentPage === 'staff' && me.school_id) query = query.eq('school_id', me.school_id);
-    const [{ data: users, error }, depResult, schoolResult] = await Promise.all([
-      query,
-      sb.from('departments').select('id,name').order('name'),
-      sb.from('schools').select('id,name,short_name').order('name')
-    ]);
-    if (error) throw error;
-    departments = depResult.data || [];
-    schools = schoolResult.data || [];
-    const pending = (users || []).filter((u) => u.role === 'pending' || u.status === 'pending');
-    const active = (users || []).filter((u) => !pending.includes(u));
-    const table = (rows) => rows.length ? `<div class="table-wrap"><table><thead><tr><th>Пользователь</th><th>Роль</th><th>Статус</th><th>Организация</th><th></th></tr></thead><tbody>${rows.map((u) => {
-      const dep = departments.find((d) => d.id === u.department_id);
-      const school = schools.find((s) => s.id === u.school_id);
-      return `<tr><td><b>${esc(u.full_name || 'Без имени')}</b><br><small>${esc(u.email || '')}</small></td><td>${esc(roleNames[u.role] || u.role)}</td><td><span class="badge ${u.status === 'blocked' ? 'danger' : u.status === 'pending' ? 'warn' : ''}">${esc(u.status)}</span></td><td>${esc(dep?.name || school?.short_name || school?.name || 'Не назначена')}</td><td>${managerRoles.includes(me.role) ? `<button class="secondary" data-user="${u.id}">Назначить</button>` : ''}</td></tr>`;
-    }).join('')}</tbody></table></div>` : empty('Пользователей нет', 'Новые заявки появятся после регистрации.');
-    $('#content').innerHTML = `<div class="toolbar"><div><h3>Пользователи и роли</h3><p class="hint">Пользователь не выбирает роль сам. Начальник РОО назначает её после регистрации.</p></div></div>
-      <article class="panel"><h3>Новые заявки <span class="badge warn">${pending.length}</span></h3>${table(pending)}</article>
-      <article class="panel" style="margin-top:18px"><h3>Активные пользователи</h3>${table(active)}</article>`;
-    $$('[data-user]').forEach((button) => { button.onclick = () => openAssignModal((users || []).find((u) => u.id === button.dataset.user)); });
-  }
-
-  function openAssignModal(user) {
-    const roleOptions = Object.entries(roleNames).filter(([key]) => key !== 'pending').map(([key, name]) => `<option value="${key}" ${user.role === key ? 'selected' : ''}>${name}</option>`).join('');
-    modal(`<h2>Назначить роль</h2><p><b>${esc(user.full_name || user.email)}</b><br>${esc(user.email || '')}</p>
-      <label>Роль<select id="aRole"><option value="pending">Ожидает назначения</option>${roleOptions}</select></label>
-      <label>Отдел<select id="aDepartment"><option value="">Не назначен</option>${departments.map((d) => `<option value="${d.id}" ${user.department_id === d.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>
-      <label>Школа<select id="aSchool"><option value="">Не назначена</option>${schools.map((s) => `<option value="${s.id}" ${user.school_id === s.id ? 'selected' : ''}>${esc(s.short_name || s.name)}</option>`).join('')}</select></label>
-      <label>Статус<select id="aStatus"><option value="active" ${user.status === 'active' ? 'selected' : ''}>Активен</option><option value="pending" ${user.status === 'pending' ? 'selected' : ''}>Ожидает</option><option value="blocked" ${user.status === 'blocked' ? 'selected' : ''}>Заблокирован</option></select></label>
-      <button id="saveAssignment" type="button" class="primary">Сохранить</button>`);
-    $('#saveAssignment').onclick = async () => {
-      const role = $('#aRole').value;
-      const departmentId = $('#aDepartment').value || null;
-      const schoolId = $('#aSchool').value || null;
-      if (['school_director', 'school_staff'].includes(role) && !schoolId) return toast('Для школьной роли выберите школу');
-      if (['department_head', 'department_staff'].includes(role) && !departmentId) return toast('Для роли отдела выберите отдел');
-      const { error } = await sb.from('profiles').update({
-        role,
-        status: $('#aStatus').value,
-        department_id: departmentId,
-        school_id: schoolId,
-        updated_at: new Date().toISOString()
-      }).eq('id', user.id);
-      if (error) return toast(error.message);
-      closeModal();
-      toast('Роль и организация назначены');
-      await renderUsers();
-    };
-  }
-
-  async function renderExams() {
-    if (!analysisRoles.includes(me.role)) {
-      $('#content').innerHTML = `<article class="panel"><h3>Результаты вашей школы</h3><p class="hint">Районные документы с пофамильными данными доступны только уполномоченным сотрудникам РОО.</p>${empty('Данные школы появятся здесь', 'После загрузки и утверждения районного анализа вам будут показаны только показатели вашей школы без чужих персональных данных.')}</article>`;
-      return;
-    }
-
-    const result = await sb.from('exam_documents')
-      .select('id,file_name,title,academic_year,exam_type,storage_path,analysis_json,tables_count,subjects_count,warnings_count,created_at')
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (result.error) {
-      const missingTable = /exam_documents|relation .* does not exist/i.test(result.error.message || '');
-      $('#content').innerHTML = `<div class="analysis-upload-card"><div><h3>Умный анализ ГИА, ЕГЭ и ОГЭ</h3><p>Загрузите DOCX, XLSX, XLS или CSV. Система прочитает все таблицы, рассчитает показатели, построит сравнения и сформирует выводы.</p></div><button id="openSmartImport" class="primary">Загрузить документ</button></div>
-        <article class="panel">${missingTable
-          ? `<div class="issue error"><b>Не установлен SQL V26</b><br>Сначала выполните PATCH_V26_SMART_ANALYSIS.sql в отдельном проекте Supabase для РОО.</div>`
-          : `<div class="issue error">${esc(result.error.message)}</div>`}</article>`;
-      $('#openSmartImport').onclick = openSmartImportWizard;
-      return;
-    }
-
-    analysisDocuments = result.data || [];
-    if (!currentAnalysis && analysisDocuments[0]?.analysis_json) currentAnalysis = analysisDocuments[0].analysis_json;
-    $('#content').innerHTML = `
-      <div class="analysis-upload-card"><div><h3>Умный анализ ГИА, ЕГЭ и ОГЭ</h3><p>Сайт понимает районные аналитические справки: таблицы по предметам и школам, динамику, аттестаты, высокие баллы, ОГЭ и ошибки в расчётах.</p></div><div class="actions"><button id="openSmartImport" class="primary">Загрузить и проанализировать</button><button id="openAnalysisHistory" class="secondary">История</button></div></div>
-      <div id="analysisHost">${currentAnalysis ? E.renderDashboard(currentAnalysis) : empty('Аналитических документов пока нет', 'Загрузите DOCX или Excel — система покажет полный интерактивный анализ.')}</div>`;
-    if (currentAnalysis) E.bindDashboard($('#analysisHost'));
-    $('#openSmartImport').onclick = openSmartImportWizard;
-    $('#openAnalysisHistory').onclick = showAnalysisHistory;
-  }
-
-  function openSmartImportWizard() {
-    pendingAnalysis = null;
-    pendingAnalysisFile = null;
-    modal(`<h2>Полный анализ документа</h2>
-      <div class="wizard">
-        <div class="steps"><div class="step active">1. Параметры</div><div class="step">2. Чтение таблиц</div><div class="step">3. Проверка</div><div class="step">4. Анализ</div><div class="step">5. Сохранение</div></div>
-        <div class="notice"><b>Не нужно переделывать документ под шаблон.</b><br>Система читает сводные таблицы, пофамильные списки, динамику по годам, аттестаты и обычный текст. Одна непонятная строка не блокирует весь документ.</div>
-        <div class="field-row"><label>Учебный год<input id="smartYear" value="2025/2026"></label><label>Вид экзамена<select id="smartExam"><option>ГИА</option><option>ЕГЭ</option><option>ОГЭ</option><option>ГВЭ</option><option>Комплексный анализ</option></select></label></div>
-        <label class="drop">Выберите DOCX, XLSX, XLS или CSV<input id="smartFile" type="file" accept=".docx,.xlsx,.xls,.csv" style="margin-top:12px"></label>
-        <button id="parseSmartFile" type="button" class="primary">Прочитать и полностью проанализировать</button>
-        <div id="smartImportResult"></div>
-      </div>`, true);
-    $('#parseSmartFile').onclick = parseSmartFile;
-  }
-
-  async function parseSmartFile() {
-    const file = $('#smartFile').files[0];
-    if (!file) return toast('Выберите документ');
-    if (!E) return toast('Модуль анализа не загрузился');
-    pendingAnalysisFile = file;
-    const host = $('#smartImportResult');
-    const button = $('#parseSmartFile');
-    button.disabled = true;
-    host.innerHTML = `<div class="parse-progress"><b>Читаем документ…</b><div class="progress"><i style="width:28%"></i></div><small>Извлекаем таблицы и текст, определяем структуру.</small></div>`;
-    try {
-      const extracted = await E.extractFile(file);
-      host.innerHTML = `<div class="parse-progress"><b>Рассчитываем показатели…</b><div class="progress"><i style="width:72%"></i></div><small>Проверяем суммы, проценты, школы, предметы и динамику.</small></div>`;
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      pendingAnalysis = E.analyze({
-        fileName: file.name,
-        academicYear: $('#smartYear').value.trim(),
-        examType: $('#smartExam').value,
-        tables: extracted.tables,
-        text: extracted.text
-      });
-      host.innerHTML = `<div class="notice"><b>Документ распознан.</b> Найдено таблиц: ${pendingAnalysis.tables.length}; предметов: ${pendingAnalysis.subjectResults.length}; замечаний для проверки: ${pendingAnalysis.warnings.length}.</div>
-        <div id="smartAnalysisPreview" style="margin-top:16px">${E.renderDashboard(pendingAnalysis)}</div>
-        <div class="toolbar" style="margin-top:18px"><button id="saveSmartAnalysis" type="button" class="primary">Сохранить документ и анализ</button><button id="cancelSmartAnalysis" type="button" class="ghost">Не сохранять</button></div>`;
-      E.bindDashboard($('#smartAnalysisPreview'));
-      $('#saveSmartAnalysis').onclick = saveSmartAnalysis;
-      $('#cancelSmartAnalysis').onclick = closeModal;
-    } catch (error) {
-      console.error(error);
-      host.innerHTML = `<div class="issue error"><b>Не удалось обработать документ</b><br>${esc(error.message)}</div>`;
-    } finally {
-      button.disabled = false;
-    }
-  }
-
-  async function saveSmartAnalysis() {
-    if (!pendingAnalysis || !pendingAnalysisFile) return toast('Сначала выполните анализ');
-    const button = $('#saveSmartAnalysis');
-    button.disabled = true;
-    button.textContent = 'Сохраняем…';
-    try {
-      const path = `exam-analysis/${me.id}/${Date.now()}_${safeFileName(pendingAnalysisFile.name)}`;
-      const upload = await sb.storage.from('roo-exam-analysis').upload(path, pendingAnalysisFile, {
-        upsert: false,
-        contentType: pendingAnalysisFile.type || undefined
-      });
-      if (upload.error) throw new Error(`Документ не загружен: ${upload.error.message}`);
-      const payload = {
-        file_name: pendingAnalysisFile.name,
-        title: pendingAnalysis.meta.title,
-        academic_year: pendingAnalysis.meta.academicYear,
-        exam_type: pendingAnalysis.meta.examType,
-        storage_path: path,
-        analysis_json: pendingAnalysis,
-        tables_count: pendingAnalysis.tables.length,
-        subjects_count: pendingAnalysis.subjectResults.length,
-        warnings_count: pendingAnalysis.warnings.length,
-        created_by: me.id
-      };
-      const { data, error } = await sb.from('exam_documents').insert(payload).select('id').single();
-      if (error) {
-        await sb.storage.from('roo-exam-analysis').remove([path]);
-        throw error;
-      }
-      await sb.from('audit_log').insert({ user_id: me.id, action: 'exam_document_analyzed', entity_type: 'exam_document', entity_id: data.id, details: { file_name: pendingAnalysisFile.name, tables: pendingAnalysis.tables.length } });
-      currentAnalysis = pendingAnalysis;
-      pendingAnalysis = null;
-      pendingAnalysisFile = null;
-      closeModal();
-      toast('Документ и полный анализ сохранены');
-      await renderExams();
-    } catch (error) {
-      console.error(error);
-      toast(error.message || 'Не удалось сохранить анализ', 5000);
-      button.disabled = false;
-      button.textContent = 'Сохранить документ и анализ';
-    }
-  }
-
-  function showAnalysisHistory() {
-    modal(`<h2>История аналитических документов</h2>${analysisDocuments.length ? `<div class="analysis-history">${analysisDocuments.map((doc) => `
-      <div class="analysis-history-item"><div><b>${esc(doc.title || doc.file_name)}</b><p>${esc(doc.file_name)} · ${esc(doc.academic_year || '')} · ${fmtDate(doc.created_at, true)}<br>${doc.tables_count || 0} таблиц · ${doc.subjects_count || 0} предметов · ${doc.warnings_count || 0} замечаний</p></div><button type="button" class="secondary" data-open-analysis="${doc.id}">Открыть</button></div>`).join('')}</div>` : empty('История пуста', 'Загруженные документы появятся здесь.')}`, true);
-    $$('[data-open-analysis]', $('#modalBody')).forEach((button) => {
-      button.onclick = () => {
-        const doc = analysisDocuments.find((item) => item.id === button.dataset.openAnalysis);
-        if (!doc) return;
-        currentAnalysis = doc.analysis_json;
-        closeModal();
-        $('#analysisHost').innerHTML = E.renderDashboard(currentAnalysis);
-        E.bindDashboard($('#analysisHost'));
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      };
-    });
-  }
-
-  async function renderReports() {
-    let docs = analysisDocuments;
-    if (!docs.length && analysisRoles.includes(me.role)) {
-      const result = await sb.from('exam_documents').select('id,file_name,title,academic_year,exam_type,analysis_json,created_at').order('created_at', { ascending: false }).limit(50);
-      if (!result.error) docs = result.data || [];
-    }
-    const available = docs.filter((doc) => doc.analysis_json);
-    $('#content').innerHTML = `<div class="toolbar"><div><h3>Конструктор оформленных отчётов</h3><p class="hint">Создаёт единый отчёт РОО по распознанным данным, а не простой список строк.</p></div></div>
-      <div class="grid cols-2"><article class="panel">
-        <label>Источник анализа<select id="reportDocument">${available.length ? available.map((doc) => `<option value="${doc.id}">${esc(doc.title || doc.file_name)} — ${esc(doc.academic_year || '')}</option>`).join('') : '<option value="">Нет сохранённых анализов</option>'}</select></label>
-        <label>Формат<select id="reportFormat"><option value="docx">Word DOCX с диаграммой</option><option value="html">HTML / печать в PDF</option><option value="xlsx">Excel с отдельными листами</option></select></label>
-        <button id="buildReport" class="primary" ${available.length ? '' : 'disabled'}>Сформировать отчёт</button>
-        <div class="settings-help" style="margin-top:14px">В отчёт входят титульный блок, ключевые показатели, выводы, предметы, школы, динамика, высокие баллы и замечания к данным.</div>
-      </article><article class="report-preview"><div class="report-head"><div class="report-logo" id="reportLogoPreview">РОО</div><h2>Информационно-аналитическая справка</h2><p>Ачхой-Мартановский муниципальный район</p></div><h3>Автоматически формируются</h3><p>Таблицы, диаграммы, динамика, сильные стороны, зоны внимания и рекомендации по проверке данных.</p><div class="chart"><div class="bar" style="height:82%"><b>99%</b><span>Русский</span></div><div class="bar" style="height:73%"><b>88%</b><span>Общество</span></div><div class="bar" style="height:90%"><b>95%</b><span>Биология</span></div><div class="bar" style="height:78%"><b>87%</b><span>Химия</span></div></div></article></div>`;
-    if ($('#buildReport')) $('#buildReport').onclick = () => buildAnalysisReport(available);
-  }
-
-  function getSelectedAnalysis(documents) {
-    const id = $('#reportDocument').value;
-    const doc = documents.find((item) => item.id === id);
-    return doc?.analysis_json || currentAnalysis;
-  }
-
-  function makeReportHtml(analysis) {
-    const subjects = analysis.subjectRanking || [];
-    const schoolsRank = analysis.schoolRanking || [];
-    const conclusions = analysis.conclusions || [];
-    const maxSuccess = Math.max(100, ...subjects.map((x) => Number(x.success) || 0));
-    const logo = branding.logo_url ? `<div class="logo"><img src="${esc(branding.logo_url)}" alt="Логотип"></div>` : '<div class="logo fallback">РОО</div>';
-    return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>${esc(analysis.meta.title)}</title><style>
-      @page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#183326;margin:0;line-height:1.42}.cover{text-align:center;min-height:245mm;display:flex;flex-direction:column;align-items:center;justify-content:center;page-break-after:always}.logo{width:105px;height:105px;border-radius:24px;display:grid;place-items:center;background:${esc(branding.background || '#fff')};padding:${Number(branding.padding)||0}px;margin:auto}.logo img{width:100%;height:100%;object-fit:contain}.logo.fallback{background:#176b4d;color:white;font-weight:bold;font-size:26px}.cover h1{font-size:25px;margin:30px 0 10px}.cover h2{font-size:18px;font-weight:normal}.section{page-break-inside:avoid;margin:24px 0}h2{color:#176b4d;border-bottom:2px solid #176b4d;padding-bottom:7px}table{width:100%;border-collapse:collapse;margin:12px 0;font-size:10.5pt}th,td{border:1px solid #9aafa1;padding:6px 7px;text-align:left}th{background:#dfece2}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.kpi{border:1px solid #b9ccbe;border-radius:10px;padding:12px;text-align:center}.kpi b{font-size:23px;color:#176b4d}.conclusion{padding:10px 12px;margin:8px 0;border-left:5px solid #176b4d;background:#f2f7f3}.bars{display:grid;gap:8px}.barrow{display:grid;grid-template-columns:160px 1fr 55px;gap:10px;align-items:center}.track{height:14px;background:#e5ede7;border-radius:99px;overflow:hidden}.fill{height:100%;background:#2b7c59}.footer{margin-top:35px;display:flex;justify-content:space-between}.muted{color:#61766a;font-size:9.5pt}</style></head><body>
-      <section class="cover">${logo}<h1>${esc(branding.full_name || 'Отдел образования Ачхой-Мартановского района')}</h1><h2>${esc(analysis.meta.title)}</h2><p>${esc(analysis.meta.examType)} · ${esc(analysis.meta.academicYear)}</p><p class="muted">Сформировано системой ${new Date().toLocaleDateString('ru-RU')}</p></section>
-      <section class="section"><h2>1. Основные показатели</h2><div class="kpis"><div class="kpi"><b>${analysis.kpi?.participants ?? '—'}</b><br>участников</div><div class="kpi"><b>${analysis.kpi?.subjects ?? '—'}</b><br>предметов</div><div class="kpi"><b>${analysis.kpi?.schools ?? '—'}</b><br>школ</div><div class="kpi"><b>${analysis.kpi?.highScores ?? '—'}</b><br>высоких баллов</div><div class="kpi"><b>${analysis.kpi?.certificates ?? '—'}</b><br>аттестатов</div><div class="kpi"><b>${analysis.kpi?.warnings ?? 0}</b><br>замечаний</div></div></section>
-      <section class="section"><h2>2. Аналитические выводы</h2>${conclusions.map((item) => `<div class="conclusion"><b>${esc(item.title)}</b><br>${esc(item.text)}</div>`).join('') || '<p>Выводы не сформированы.</p>'}</section>
-      <section class="section"><h2>3. Успеваемость по предметам</h2><div class="bars">${subjects.map((item) => `<div class="barrow"><span>${esc(item.subject)}</span><div class="track"><div class="fill" style="width:${Math.max(1,(Number(item.success)||0)/maxSuccess*100)}%"></div></div><b>${item.success ?? '—'}%</b></div>`).join('')}</div></section>
-      <section class="section"><h2>4. Сводные результаты по предметам</h2><table><thead><tr><th>Предмет</th><th>Всего</th><th>5</th><th>4</th><th>3</th><th>2</th><th>Сдали</th><th>Не сдали</th><th>КЗ</th><th>Усп.</th></tr></thead><tbody>${subjects.map((item) => `<tr><td>${esc(item.subject)}</td><td>${item.total}</td><td>${item.count5}</td><td>${item.count4}</td><td>${item.count3}</td><td>${item.count2}</td><td>${item.passed}</td><td>${item.failed}</td><td>${item.quality ?? '—'}%</td><td>${item.success ?? '—'}%</td></tr>`).join('')}</tbody></table></section>
-      <section class="section"><h2>5. Сравнение школ</h2><table><thead><tr><th>№</th><th>Школа</th><th>Предметов</th><th>Участий</th><th>КЗ</th><th>Усп.</th><th>Средняя оценка</th></tr></thead><tbody>${schoolsRank.map((item, index) => `<tr><td>${index+1}</td><td>${esc(item.school)}</td><td>${item.subjects}</td><td>${item.participants}</td><td>${item.quality ?? '—'}%</td><td>${item.success ?? '—'}%</td><td>${item.avg ?? '—'}</td></tr>`).join('')}</tbody></table></section>
-      ${(analysis.averageScores || []).length ? `<section class="section"><h2>6. Динамика среднего тестового балла</h2><table><thead><tr><th>Предмет</th><th>2024</th><th>2025</th><th>2026</th><th>Изменение 2025→2026</th></tr></thead><tbody>${analysis.averageScores.map((item) => `<tr><td>${esc(item.subject)}</td><td>${item.y2024 ?? '—'}</td><td>${item.y2025 ?? '—'}</td><td>${item.y2026 ?? '—'}</td><td>${item.y2025 !== null && item.y2026 !== null ? `${item.y2026-item.y2025>=0?'+':''}${(item.y2026-item.y2025).toFixed(1)}` : '—'}</td></tr>`).join('')}</tbody></table></section>` : ''}
-      ${(analysis.highScores || []).length ? `<section class="section"><h2>7. Высокие результаты (80+)</h2><table><thead><tr><th>№</th><th>Школа</th><th>Ф.И.О.</th><th>Предмет</th><th>Баллы</th></tr></thead><tbody>${analysis.highScores.map((item,index) => `<tr><td>${index+1}</td><td>${esc(item.school)}</td><td>${esc(item.name)}</td><td>${esc(item.subject)}</td><td>${item.score}</td></tr>`).join('')}</tbody></table></section>` : ''}
-      <section class="section"><h2>8. Проверка качества данных</h2>${(analysis.warnings || []).length ? `<table><thead><tr><th>Таблица</th><th>Строка</th><th>Замечание</th></tr></thead><tbody>${analysis.warnings.map((item) => `<tr><td>${esc(item.table || '')}</td><td>${item.row || '—'}</td><td>${esc(item.text)}</td></tr>`).join('')}</tbody></table>` : '<p>Расхождений не найдено.</p>'}</section>
-      <div class="footer"><span>Ответственный: ____________________</span><span>Дата: ____________________</span></div>
-      </body></html>`;
-  }
-
-  async function buildAnalysisReport(documents) {
-    const analysis = getSelectedAnalysis(documents);
-    if (!analysis) return toast('Выберите сохранённый анализ');
-    const format = $('#reportFormat').value;
-    if (format === 'xlsx') return exportAnalysisXlsx(analysis);
-    const base = `Анализ_${safeFileName(analysis.meta.examType)}_${safeFileName(analysis.meta.academicYear)}`;
-    if (format === 'docx') {
-      if (!window.ROODocxExporter) return toast('Модуль DOCX не загрузился');
-      try {
-        await window.ROODocxExporter.export(analysis, branding, `${base}.docx`);
-        toast('DOCX с диаграммой сформирован');
-      } catch (error) {
-        console.error(error);
-        toast(`Не удалось создать DOCX: ${error.message}`, 5000);
-      }
-      return;
-    }
-    const html = makeReportHtml(analysis);
-    const win = window.open('', '_blank');
-    if (!win) return toast('Браузер заблокировал новое окно');
-    win.document.write(html);
-    win.document.close();
-    window.setTimeout(() => win.print(), 350);
-  }
-
-  function exportAnalysisXlsx(analysis) {
-    if (!window.XLSX) return toast('Модуль Excel не загрузился');
-    const wb = XLSX.utils.book_new();
-    const summary = [
-      [branding.full_name], [analysis.meta.title], ['Учебный год', analysis.meta.academicYear], ['Вид экзамена', analysis.meta.examType],
-      ['Дата формирования', new Date().toLocaleString('ru-RU')], [],
-      ['Показатель', 'Значение'], ['Участников', analysis.kpi?.participants], ['Предметов', analysis.kpi?.subjects], ['Школ', analysis.kpi?.schools],
-      ['Высоких баллов', analysis.kpi?.highScores], ['Аттестатов', analysis.kpi?.certificates], ['Замечаний', analysis.kpi?.warnings], [],
-      ['Автоматические выводы'], ...(analysis.conclusions || []).map((item) => [item.title, item.text])
-    ];
-    const subjectRows = (analysis.subjectRanking || []).map((item) => ({
-      'Предмет': item.subject, 'Всего': item.total, '5': item.count5, '4': item.count4, '3': item.count3, '2': item.count2,
-      'Сдали': item.passed, 'Не сдали': item.failed, 'Качество знаний, %': item.quality, 'Успеваемость, %': item.success, 'Средняя оценка': item.avg
-    }));
-    const schoolRows = (analysis.schoolRanking || []).map((item, index) => ({
-      '№': index + 1, 'Школа': item.school, 'Предметов': item.subjects, 'Участий': item.participants, 'Сдали': item.passed,
-      'Не сдали': item.failed, 'Качество знаний, %': item.quality, 'Успеваемость, %': item.success, 'Средняя оценка': item.avg
-    }));
-    const highRows = (analysis.highScores || []).map((item, index) => ({ '№': index + 1, 'Школа': item.school, 'Ф.И.О.': item.name, 'Предмет': item.subject, 'Баллы': item.score }));
-    const warningRows = (analysis.warnings || []).map((item) => ({ 'Таблица': item.table, 'Строка': item.row || '', 'Уровень': item.level, 'Замечание': item.text }));
-    const dynamicsRows = (analysis.averageScores || []).map((item) => ({ 'Предмет': item.subject, '2024': item.y2024, '2025': item.y2025, '2026': item.y2026, 'Динамика 2026': item.d2026 }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), 'Сводка');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(subjectRows), 'Предметы');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(schoolRows), 'Школы');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dynamicsRows), 'Динамика');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(highRows), 'Высокие баллы');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(warningRows), 'Проверка данных');
-    XLSX.writeFile(wb, `Анализ_${safeFileName(analysis.meta.examType)}_${safeFileName(analysis.meta.academicYear)}.xlsx`);
-    toast('Excel сформирован');
-  }
-
-  function download(blob, name) {
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = name;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(link.href), 1500);
-  }
-
-  async function renderSettings() {
-    if (me.role !== 'roo_head') {
-      $('#content').innerHTML = empty('Недостаточно прав', 'Менять логотип и оформление может только начальник РОО.');
-      return;
-    }
-    $('#content').innerHTML = `<div class="toolbar"><div><h3>Фирменное оформление</h3><p class="hint">Логотип автоматически вписывается без обрезки. Для непрозрачного PNG фон определяется по краям изображения.</p></div></div>
-      <article class="panel"><div class="logo-preview-shell"><div class="logo-preview-stage"><div class="brand-mark" id="logoPreviewMark"><img id="logoPreviewImage" alt="Предпросмотр" ${branding.logo_url ? `src="${esc(branding.logo_url)}"` : 'hidden'}><span class="brand-fallback" ${branding.logo_url ? 'hidden' : ''}>РОО</span></div></div>
-      <div class="logo-controls"><label>PNG, JPG, SVG или WebP<input id="brandFile" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*"></label>
-        <div class="color-row"><label>Фон вокруг логотипа<input id="brandBackgroundText" value="${esc(branding.background || '#ffffff')}"></label><input id="brandBackgroundColor" type="color" value="${normalizeHexColor(branding.background)}" title="Выбрать цвет"></div>
-        <div class="range-row"><label>Внутренний отступ<input id="brandPadding" type="range" min="0" max="28" value="${Number(branding.padding) || 0}"></label><output id="brandPaddingValue">${Number(branding.padding) || 0}px</output></div>
-        <label>Краткое название<input id="brandShort" value="${esc(branding.short_name || '')}"></label>
-        <label>Подпись<input id="brandSub" value="${esc(branding.subtitle || '')}"></label>
-        <label>Полное название<input id="brandFull" value="${esc(branding.full_name || '')}"></label>
-        <div class="actions"><button id="saveBranding" class="primary">Сохранить оформление</button><button id="removeBranding" class="danger">Убрать логотип</button></div>
-        <div class="settings-help"><b>Как работает адаптация:</b> прозрачный PNG остаётся прозрачным; у изображения с фоном система анализирует крайние пиксели и устанавливает такой же фон контейнера. <code>object-fit: contain</code> исключает обрезку.</div>
-      </div></div></article>`;
-
-    const fileInput = $('#brandFile');
-    const backgroundText = $('#brandBackgroundText');
-    const backgroundColor = $('#brandBackgroundColor');
-    const padding = $('#brandPadding');
-    const previewMark = $('#logoPreviewMark');
-    const previewImage = $('#logoPreviewImage');
-    const fallback = $('.brand-fallback', previewMark);
-
-    const refreshPreview = () => {
-      previewMark.style.setProperty('--logo-bg', backgroundText.value || '#ffffff');
-      previewMark.style.setProperty('--logo-pad', `${padding.value}px`);
-      $('#brandPaddingValue').textContent = `${padding.value}px`;
-    };
-    backgroundText.oninput = () => { backgroundColor.value = normalizeHexColor(backgroundText.value); refreshPreview(); };
-    backgroundColor.oninput = () => { backgroundText.value = backgroundColor.value; refreshPreview(); };
-    padding.oninput = refreshPreview;
-
-    fileInput.onchange = async () => {
-      const file = fileInput.files[0];
-      if (!file) return;
-      pendingBrandFile = file;
-      const url = URL.createObjectURL(file);
-      previewImage.src = url;
-      previewImage.hidden = false;
-      fallback.hidden = true;
-      try {
-        const detected = await E.detectLogoBackground(file);
-        backgroundText.value = detected.background;
-        backgroundColor.value = normalizeHexColor(detected.background);
-        refreshPreview();
-        toast(detected.transparent ? 'Прозрачный фон распознан' : 'Цвет фона подобран автоматически');
-      } catch (error) {
-        toast(error.message);
-      }
-      previewImage.onload = () => URL.revokeObjectURL(url);
-    };
-
-    $('#saveBranding').onclick = saveBrandingSettings;
-    $('#removeBranding').onclick = removeBrandingLogo;
-    refreshPreview();
-  }
-
-  function normalizeHexColor(value) {
-    const text = String(value || '').trim();
-    if (/^#[0-9a-f]{6}$/i.test(text)) return text;
-    const match = text.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-    if (match) return `#${[match[1], match[2], match[3]].map((x) => Math.max(0, Math.min(255, Number(x))).toString(16).padStart(2, '0')).join('')}`;
-    return '#ffffff';
-  }
-
-  async function saveBrandingSettings() {
-    const button = $('#saveBranding');
-    button.disabled = true;
-    button.textContent = 'Сохраняем…';
-    try {
-      let logoUrl = branding.logo_url || '';
-      if (pendingBrandFile) {
-        const extension = (pendingBrandFile.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
-        const path = `branding/logo.${extension}`;
-        const upload = await sb.storage.from('roo-public').upload(path, pendingBrandFile, { upsert: true, contentType: pendingBrandFile.type || undefined });
-        if (upload.error) throw new Error(`Логотип не загружен: ${upload.error.message}`);
-        const { data } = sb.storage.from('roo-public').getPublicUrl(path);
-        logoUrl = `${data.publicUrl}?v=${Date.now()}`;
-      }
-      const next = {
-        logo_url: logoUrl,
-        background: $('#brandBackgroundText').value.trim() || '#ffffff',
-        padding: Number($('#brandPadding').value) || 0,
-        short_name: $('#brandShort').value.trim() || 'Ачхой-Мартан',
-        subtitle: $('#brandSub').value.trim() || 'Отдел образования',
-        full_name: $('#brandFull').value.trim() || 'Отдел образования Ачхой-Мартановского района'
-      };
-      const { error } = await sb.from('site_settings').upsert({ key: 'branding', value: next, updated_by: me.id, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-      if (error) throw error;
-      branding = next;
-      localStorage.setItem('roo_branding_v26', JSON.stringify(branding));
-      pendingBrandFile = null;
-      applyBranding();
-      toast('Логотип и оформление сохранены');
-      await renderSettings();
-    } catch (error) {
-      console.error(error);
-      toast(error.message || 'Не удалось сохранить оформление', 5000);
-    } finally {
-      button.disabled = false;
-      button.textContent = 'Сохранить оформление';
-    }
-  }
-
-  async function removeBrandingLogo() {
-    const next = { ...branding, logo_url: '', background: '#ffffff', padding: 8 };
-    const { error } = await sb.from('site_settings').upsert({ key: 'branding', value: next, updated_by: me.id, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    if (error) return toast(error.message);
-    branding = next;
-    localStorage.setItem('roo_branding_v26', JSON.stringify(branding));
-    pendingBrandFile = null;
-    applyBranding();
-    toast('Логотип удалён');
-    await renderSettings();
-  }
-
-  window.addEventListener('DOMContentLoaded', boot);
+}
+function showAuth(){
+  $('#app').hidden=true;$('#auth').hidden=false;$('#loginMessage').textContent='';
+}
+async function login(e){
+  e.preventDefault();const btn=$('button[type="submit"]',e.currentTarget);setBusy(btn,true,'Входим…');$('#loginMessage').textContent='';
+  try{
+    const email=$('#loginEmail').value.trim(),password=$('#loginPassword').value;
+    if(!email||!password)throw new Error('Введите почту и пароль.');
+    const r=await sb.auth.signInWithPassword({email,password});if(r.error)throw r.error;session=r.data.session;await enter(r.data.user);$('#loginMessage').textContent='Вход выполнен.';
+  }catch(err){console.error(err);$('#loginMessage').textContent=err.message==='Invalid login credentials'?'Неверная почта или пароль.':err.message}
+  finally{setBusy(btn,false)}
+}
+async function register(e){
+  e.preventDefault();const btn=$('button[type="submit"]',e.currentTarget);setBusy(btn,true,'Отправляем…');$('#registerMessage').textContent='';
+  try{
+    const email=$('#regEmail').value.trim(),password=$('#regPassword').value,full_name=$('#regName').value.trim(),phone=$('#regPhone').value.trim(),requested_unit_id=$('#regUnit').value||null,place=$('#regPlace').value;
+    if(!full_name||!email||password.length<8)throw new Error('Заполните Ф.И.О., почту и пароль не короче 8 символов.');
+    const r=await sb.auth.signUp({email,password,options:{data:{full_name,phone,requested_unit_id,place}}});if(r.error)throw r.error;
+    $('#registerMessage').textContent='Заявка создана. Подтвердите почту, затем начальник РОО назначит вам роль.';e.currentTarget.reset();await loadRegisterUnits();
+  }catch(err){$('#registerMessage').textContent=err.message}finally{setBusy(btn,false)}
+}
+async function forgotPassword(){
+  const email=$('#loginEmail').value.trim();if(!email){$('#loginMessage').textContent='Сначала введите рабочую почту.';return}
+  const r=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});$('#loginMessage').textContent=r.error?r.error.message:'Письмо для восстановления пароля отправлено.'
+}
+async function loadRegisterUnits(){
+  if(!sb)return;try{const [d,s]=await Promise.all([sb.from('departments').select('id,name').order('name'),sb.from('schools').select('id,name').order('name')]);const place=$('#regPlace');const update=()=>{const rows=place.value==='school'?(s.data||[]):(d.data||[]);$('#regUnit').innerHTML='<option value="">Выберите организацию</option>'+rows.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')};place.onchange=update;update()}catch(_){ }
+}
+
+async function ensureProfile(user){
+  let r=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+  if(r.error)throw r.error;
+  if(!r.data){const ins=await sb.from('profiles').insert({id:user.id,email:user.email,full_name:user.user_metadata?.full_name||'',phone:user.user_metadata?.phone||'',role:'pending',status:'pending'}).select().single();if(ins.error)throw ins.error;r=ins}
+  return r.data;
+}
+async function enter(user){
+  me=await ensureProfile(user);$('#auth').hidden=true;$('#app').hidden=false;
+  $('#userName').textContent=me.full_name||me.email;$('#userRole').textContent=ROLE_LABELS[me.role]||me.role;$('#avatar').textContent=initials(me.full_name||me.email);
+  renderNav();await refreshNotifications();await navigate((ROLE_MENUS[me.role]||['pending'])[0]);
+}
+function renderNav(){const menu=ROLE_MENUS[me.role]||['pending'];$('#nav').innerHTML=menu.map(k=>`<button type="button" class="nav-btn" data-page="${k}"><span class="nav-icon">${PAGE_META[k]?.[1]||'•'}</span>${PAGE_META[k]?.[0]||k}</button>`).join('');$$('.nav-btn').forEach(b=>b.onclick=()=>navigate(b.dataset.page))}
+async function navigate(page){
+  currentPage=page;$$('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('#pageTitle').textContent=PAGE_META[page]?.[0]||page;$('#crumb').textContent=branding.short_name||'Рабочая система РОО';$('.sidebar').classList.remove('open');
+  const fn={dashboard:renderDashboard,pending:renderPending,tasks:renderTasks,schools:renderSchools,school:renderMySchool,rating:renderRating,exams:renderExams,departments:renderDepartments,reports:renderReports,calendar:renderCalendar,documents:renderDocuments,appeals:renderAppeals,meetings:renderMeetings,inspections:renderInspections,users:renderUsers,audit:renderAudit,settings:renderSettings}[page]||renderDashboard;
+  $('#content').innerHTML='<div class="empty">Загрузка…</div>';try{await fn()}catch(e){console.error(e);$('#content').innerHTML=empty('Раздел временно недоступен',e.message||'Ошибка загрузки')}
+}
+async function count(table,filter){let q=sb.from(table).select('*',{count:'exact',head:true});if(filter)q=filter(q);const r=await q;return r.error?0:(r.count||0)}
+async function loadSchools(force=false){if(cache.schools&&!force)return cache.schools;const r=await sb.from('schools').select('*').order('name');queryError(r);cache.schools=r.data||[];return cache.schools}
+async function loadDepartments(force=false){if(cache.departments&&!force)return cache.departments;const r=await sb.from('departments').select('*').order('name');queryError(r);cache.departments=r.data||[];return cache.departments}
+async function loadProfiles(force=false){if(cache.profiles&&!force)return cache.profiles;const r=await sb.from('profiles').select('*,schools(name),departments(name)').order('created_at',{ascending:false});queryError(r);cache.profiles=r.data||[];return cache.profiles}
+
+async function renderPending(){
+  $('#content').innerHTML=`<div class="panel"><h3>Заявка принята</h3><p>Ваш аккаунт создан, но роль ещё не назначена.</p><div class="notice info">Начальник РОО должен открыть раздел «Пользователи и роли», выбрать вашу должность, школу или отдел и активировать доступ.</div><button id="pendingRefresh" class="primary" type="button">Проверить статус</button></div>`;
+  $('#pendingRefresh').onclick=async()=>{me=await ensureProfile(session.user);if(me.status==='active'&&me.role!=='pending'){renderNav();navigate('dashboard')}else toast('Роль пока не назначена','warn')}
+}
+
+async function renderDashboard(){
+  const [tasks,schools,docs,appeals,pending,notifications]=await Promise.all([count('tasks'),count('schools'),count('documents'),count('appeals',q=>q.neq('status','closed')),isRoo()?count('profiles',q=>q.eq('role','pending')):0,count('notifications',q=>q.eq('is_read',false))]);
+  const due=await sb.from('task_recipients').select('id,status,tasks(title,due_at)').order('updated_at',{ascending:false}).limit(20);
+  const recent=await sb.from('audit_log').select('action,entity_type,created_at,profiles(full_name)').order('created_at',{ascending:false}).limit(8);
+  $('#content').innerHTML=`<div class="grid cols-4">
+    <article class="panel stat"><b>${tasks||'—'}</b><small>Поручения</small></article><article class="panel stat"><b>${schools||'—'}</b><small>Школы</small></article><article class="panel stat"><b>${docs||'—'}</b><small>Документы</small></article><article class="panel stat"><b>${appeals||'—'}</b><small>Открытые обращения</small></article>
+  </div><div class="split" style="margin-top:17px"><article class="panel"><div class="section-title"><h3>Что требует внимания</h3></div>${pending?`<div class="notice warn">Пользователей без роли: <b>${pending}</b>. <button class="link-btn" data-go="users">Открыть</button></div>`:''}${notifications?`<div class="notice info">Непрочитанных уведомлений: <b>${notifications}</b>.</div>`:''}${(due.data||[]).length?`<div class="metric-list">${due.data.map(x=>`<div class="metric-row"><span>${esc(x.tasks?.title||'Поручение')}</span>${badge(x.status)}</div>`).join('')}</div>`:empty('Нет срочных пунктов','Новые поручения и сроки появятся здесь.')}</article><article class="panel"><h3>Последние действия</h3>${(recent.data||[]).length?`<div class="timeline">${recent.data.map(x=>`<div class="timeline-item"><i></i><div><b>${esc(x.action)}</b><div class="small">${esc(x.profiles?.full_name||'Система')} · ${fmtDate(x.created_at,true)}</div></div></div>`).join('')}</div>`:empty('Журнал пуст','Действия пользователей появятся после работы в системе.')}</article></div>`;
+  $$('[data-go]').forEach(b=>b.onclick=()=>navigate(b.dataset.go));
+}
+
+// -------------------- ПОРУЧЕНИЯ --------------------
+async function renderTasks(){
+  let q=sb.from('tasks').select('*,profiles!tasks_created_by_fkey(full_name),task_recipients(id,status,school_id,department_id,updated_at,schools(name),departments(name))').order('created_at',{ascending:false});
+  const r=await q;queryError(r);const rows=r.data||[];
+  $('#content').innerHTML=`<div class="toolbar"><div class="filters"><select id="taskStatusFilter"><option value="">Все статусы</option>${Object.entries(STATUS_LABELS).filter(([k])=>['new','in_progress','director_review','roo_review','accepted','returned'].includes(k)).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><input id="taskSearch" placeholder="Поиск по названию"></div><div class="actions">${canCreateTasks()?'<button id="newTask" class="primary" type="button">+ Новое поручение</button>':''}</div></div><div id="tasksList"></div>`;
+  const draw=()=>{const s=$('#taskSearch').value.toLowerCase(),f=$('#taskStatusFilter').value;const filtered=rows.filter(t=>(!s||`${t.title} ${t.description||''}`.toLowerCase().includes(s))&&(!f||(t.task_recipients||[]).some(x=>x.status===f)));$('#tasksList').innerHTML=filtered.length?`<div class="cards">${filtered.map(t=>{const rs=t.task_recipients||[],acc=rs.filter(x=>x.status==='accepted').length,over=rs.filter(x=>t.due_at&&new Date(t.due_at)<new Date()&&!['accepted','cancelled'].includes(x.status)).length;return `<article class="entity-card row-click" data-task="${t.id}"><div class="section-title"><h4>${esc(t.title)}</h4>${badge(t.status)}</div><p>${esc((t.description||'').slice(0,170))}</p><div class="metric-row"><span>Получателей</span><b>${rs.length||1}</b></div><div class="metric-row"><span>Принято</span><b>${acc}</b></div><div class="metric-row"><span>Просрочено</span><b class="${over?'rating-bad':''}">${over}</b></div><div class="small">Срок: ${fmtDate(t.due_at,true)} · ${esc(t.profiles?.full_name||'')}</div></article>`}).join('')}</div>`:empty('Поручений нет','Создайте первое поручение или измените фильтр.');$$('[data-task]').forEach(x=>x.onclick=()=>openTask(x.dataset.task));};
+  draw();$('#taskSearch').oninput=draw;$('#taskStatusFilter').onchange=draw;if($('#newTask'))$('#newTask').onclick=openTaskCreate;
+}
+async function openTaskCreate(){
+  const [schools,deps]=await Promise.all([loadSchools(),loadDepartments()]);
+  modal(`<h2>Новое поручение</h2><div class="grid cols-2"><label>Название<input id="taskTitle"></label><label>Категория<select id="taskCategory"><option>Отчётность</option><option>Экзамены</option><option>Воспитательная работа</option><option>Хозяйственная работа</option><option>Проверка</option><option>Другое</option></select></label><label>Приоритет<select id="taskPriority"><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option></select></label><label>Срок<input id="taskDue" type="datetime-local"></label></div><label>Описание<textarea id="taskDescription"></textarea></label><label>Что обязательно приложить / заполнить<textarea id="taskInstructions"></textarea></label><div class="grid cols-2"><label>Кому<select id="taskTargetType"><option value="all_schools">Всем школам</option><option value="school">Одной школе</option><option value="department">Отделу РОО</option></select></label><label>Получатель<select id="taskTarget"></select></label></div><label><input id="taskDirectorApproval" type="checkbox" checked style="width:auto"> Требуется подтверждение директора школы</label><div class="form-actions"><button id="saveTask" class="primary" type="button">Создать поручение</button><button class="ghost" type="button" data-close>Отмена</button></div>`);
+  const type=$('#taskTargetType'),target=$('#taskTarget');const fill=()=>{if(type.value==='all_schools'){target.innerHTML='<option value="all">Все школы района</option>';target.disabled=true}else{target.disabled=false;const rows=type.value==='school'?schools:deps;target.innerHTML=rows.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}};type.onchange=fill;fill();$('[data-close]').onclick=closeModal;$('#saveTask').onclick=saveNewTask;
+}
+async function saveNewTask(){
+  const btn=$('#saveTask');setBusy(btn,true);try{
+    const title=$('#taskTitle').value.trim();if(!title)throw new Error('Введите название поручения.');const type=$('#taskTargetType').value,due=$('#taskDue').value?new Date($('#taskDue').value).toISOString():null;
+    const payload={title,description:$('#taskDescription').value.trim(),instructions:$('#taskInstructions').value.trim(),category:$('#taskCategory').value,priority:$('#taskPriority').value,due_at:due,created_by:me.id,updated_by:me.id,requires_director_approval:$('#taskDirectorApproval').checked,assigned_to_all_schools:type==='all_schools'};
+    if(type==='school')payload.assigned_school_id=$('#taskTarget').value;if(type==='department')payload.assigned_department_id=$('#taskTarget').value;
+    const t=queryError(await sb.from('tasks').insert(payload).select().single());let recipients=[];
+    if(type==='all_schools'){const schools=await loadSchools();recipients=schools.map(s=>({task_id:t.id,school_id:s.id,status:'new'}))}else if(type==='school')recipients=[{task_id:t.id,school_id:$('#taskTarget').value,status:'new'}];else recipients=[{task_id:t.id,department_id:$('#taskTarget').value,status:'new'}];
+    if(recipients.length)queryError(await sb.from('task_recipients').insert(recipients));
+    await sb.from('notifications').insert(recipients.map(x=>({school_id:x.school_id||null,department_id:x.department_id||null,title:'Новое поручение',body:title,link_page:'tasks',entity_id:t.id})));
+    await audit('Создано поручение','task',t.id,{title,recipients:recipients.length});closeModal();toast('Поручение создано');renderTasks();
+  }catch(e){toast(e.message,'error')}finally{setBusy(btn,false)}
+}
+async function openTask(id){
+  const t=queryError(await sb.from('tasks').select('*,profiles!tasks_created_by_fkey(full_name),task_recipients(*,schools(name),departments(name))').eq('id',id).single());
+  let recipient=me._viewRecipient||(t.task_recipients||[]).find(r=>(me.school_id&&r.school_id===me.school_id)||(me.department_id&&r.department_id===me.department_id));if(isRoo()&&!recipient)recipient=(t.task_recipients||[])[0];
+  const rid=recipient?.id;const [responses,comments,files]=await Promise.all([rid?sb.from('task_responses').select('*,profiles!task_responses_author_id_fkey(full_name)').eq('task_id',id).order('created_at',{ascending:false}):Promise.resolve({data:[]}),rid?sb.from('task_comments').select('*,profiles(full_name)').eq('task_id',id).order('created_at'):Promise.resolve({data:[]}),sb.from('attachments').select('*').eq('entity_type','task').eq('entity_id',id).order('created_at')]);
+  const statuses=['new','in_progress','director_review','roo_review','accepted'];const active=statuses.indexOf(recipient?.status||t.status);
+  const recipientOptions=isRoo()?`<label>Получатель<select id="taskRecipientSelect">${(t.task_recipients||[]).map(r=>`<option value="${r.id}" ${r.id===rid?'selected':''}>${esc(r.schools?.name||r.departments?.name||'Получатель')} — ${esc(STATUS_LABELS[r.status]||r.status)}</option>`).join('')}</select></label>`:'';
+  modal(`<div class="section-title"><div><span class="badge">${esc(t.category||'Поручение')}</span><h2>${esc(t.title)}</h2></div>${badge(recipient?.status||t.status)}</div><p>${esc(t.description||'')}</p>${t.instructions?`<div class="notice info"><b>Обязательные требования</b><br>${esc(t.instructions)}</div>`:''}<div class="small">Срок: ${fmtDate(t.due_at,true)} · Автор: ${esc(t.profiles?.full_name||'')}</div>${recipientOptions}<div class="workflow">${statuses.map((s,i)=>`<div class="workflow-step ${i<active?'done':i===active?'active':''}">${STATUS_LABELS[s]}</div>`).join('')}</div><div class="split"><div><div class="panel" style="box-shadow:none"><h3>Ответ и файлы</h3><label>Текст ответа<textarea id="taskResponseText">${esc(responses.data?.[0]?.response_text||responses.data?.[0]?.text||'')}</textarea></label><label>Приложить файлы<input id="taskFiles" type="file" multiple></label><div class="file-list">${(files.data||[]).map(f=>`<div class="file-item"><span>📎 ${esc(f.file_name)}</span><button type="button" class="link-btn" data-download="${f.id}">Открыть</button></div>`).join('')||'<span class="small">Файлов пока нет</span>'}</div><div class="form-actions" style="margin-top:14px">${taskActionButtons(t,recipient)}</div></div><div class="panel" style="box-shadow:none;margin-top:14px"><h3>Комментарии</h3><div class="timeline">${(comments.data||[]).map(c=>`<div class="timeline-item"><i></i><div><b>${esc(c.profiles?.full_name||'Пользователь')}</b><p>${esc(c.message)}</p><small>${fmtDate(c.created_at,true)}</small></div></div>`).join('')||'<span class="small">Комментариев пока нет</span>'}</div><div class="inline-actions"><input id="taskComment" placeholder="Добавить комментарий"><button id="addTaskComment" class="secondary" type="button">Отправить</button></div></div></div><aside><div class="panel" style="box-shadow:none"><h3>Получатели</h3>${(t.task_recipients||[]).map(r=>`<div class="metric-row"><span>${esc(r.schools?.name||r.departments?.name||'')}</span>${badge(r.status)}</div>`).join('')}</div><div class="panel" style="box-shadow:none;margin-top:14px"><h3>Версии ответа</h3>${(responses.data||[]).map(r=>`<div class="notice"><b>Версия ${r.version_no||1}</b><div class="small">${esc(r.profiles?.full_name||'')} · ${fmtDate(r.created_at,true)}</div></div>`).join('')||'<span class="small">Нет сохранённых версий</span>'}</div></aside></div>`);
+  if($('#taskRecipientSelect'))$('#taskRecipientSelect').onchange=()=>openTaskRecipient(t,$('#taskRecipientSelect').value);
+  bindTaskActions(t,recipient);$('#addTaskComment').onclick=()=>addTaskComment(t.id,recipient?.id);$$('[data-download]').forEach(b=>b.onclick=()=>downloadAttachment(b.dataset.download));
+}
+async function openTaskRecipient(t,rid){const r=(t.task_recipients||[]).find(x=>x.id===rid);if(r){me._viewRecipient=r;await openTask(t.id);delete me._viewRecipient}}
+function taskActionButtons(t,r){if(!r)return isRoo()?'<span class="small">Выберите получателя.</span>':'';const s=r.status;let html='<button id="saveTaskDraft" class="ghost" type="button">Сохранить черновик</button>';if(['school_staff','school_director','department_staff','department_head'].includes(me.role)){if(s==='new')html+='<button id="acceptTask" class="secondary" type="button">Принять в работу</button>';if(['new','in_progress','returned'].includes(s))html+='<button id="submitTask" class="primary" type="button">Отправить ответ</button>';if(me.role==='school_director'&&s==='director_review')html+='<button id="directorApprove" class="primary" type="button">Подтвердить директором</button><button id="directorReturn" class="danger" type="button">Вернуть сотруднику</button>'}if(isRoo()&&s==='roo_review')html+='<button id="rooAccept" class="primary" type="button">Принять отчёт</button><button id="rooReturn" class="danger" type="button">Вернуть на исправление</button>';return html}
+function bindTaskActions(t,r){if(!r)return;const action=async(status,comment='')=>{try{await saveTaskResponse(t,r,false);const upd={status,last_comment:comment||null};if(status==='in_progress'){upd.accepted_at=new Date().toISOString();upd.accepted_by=me.id}if(status==='director_review')upd.submitted_at=new Date().toISOString();if(status==='roo_review'){upd.director_reviewed_at=new Date().toISOString();upd.director_reviewed_by=me.id}if(status==='accepted'){upd.roo_reviewed_at=new Date().toISOString();upd.roo_reviewed_by=me.id;upd.completed_at=new Date().toISOString()}queryError(await sb.from('task_recipients').update(upd).eq('id',r.id));await audit('Изменён статус поручения','task',t.id,{status,recipient:r.id});toast('Статус обновлён');openTask(t.id)}catch(e){toast(e.message,'error')}};if($('#saveTaskDraft'))$('#saveTaskDraft').onclick=()=>saveTaskResponse(t,r,true);if($('#acceptTask'))$('#acceptTask').onclick=()=>action('in_progress');if($('#submitTask'))$('#submitTask').onclick=()=>action((r.school_id&&t.requires_director_approval&&me.role!=='school_director')?'director_review':'roo_review');if($('#directorApprove'))$('#directorApprove').onclick=()=>action('roo_review');if($('#directorReturn'))$('#directorReturn').onclick=()=>action('returned','Возвращено директором');if($('#rooAccept'))$('#rooAccept').onclick=()=>action('accepted');if($('#rooReturn'))$('#rooReturn').onclick=()=>{const c=prompt('Причина возврата:')||'Требуется исправление';action('returned',c)}}
+async function saveTaskResponse(t,r,notify=true){const text=$('#taskResponseText').value.trim();let prevQuery=sb.from('task_responses').select('version_no').eq('task_id',t.id);prevQuery=r.school_id?prevQuery.eq('school_id',r.school_id):prevQuery.eq('department_id',r.department_id);const prev=await prevQuery.order('version_no',{ascending:false}).limit(1);const version=(prev.data?.[0]?.version_no||0)+1;queryError(await sb.from('task_responses').insert({task_id:t.id,author_id:me.id,school_id:r.school_id||null,department_id:r.department_id||null,text,response_text:text,status:'draft',version_no:version}));const files=[...($('#taskFiles')?.files||[])];for(const file of files)await uploadAttachment('task',t.id,file);if(notify)toast('Черновик сохранён')}
+async function addTaskComment(taskId,recipientId){const message=$('#taskComment').value.trim();if(!message)return;queryError(await sb.from('task_comments').insert({task_id:taskId,recipient_id:recipientId||null,author_id:me.id,message}));await audit('Добавлен комментарий','task',taskId,{message});openTask(taskId)}
+async function uploadAttachment(entityType,entityId,file){const path=`${entityType}/${entityId}/${me.id}/${Date.now()}-${fileSafe(file.name)}`;const up=await sb.storage.from('roo-documents').upload(path,file,{upsert:false});if(up.error)throw up.error;queryError(await sb.from('attachments').insert({entity_type:entityType,entity_id:entityId,bucket_id:'roo-documents',storage_path:path,file_name:file.name,mime_type:file.type,size_bytes:file.size,uploaded_by:me.id}))}
+async function downloadAttachment(id){const r=queryError(await sb.from('attachments').select('*').eq('id',id).single());const d=await sb.storage.from(r.bucket_id).download(r.storage_path);if(d.error)throw d.error;download(d.data,r.file_name)}
+
+// -------------------- ШКОЛЫ И РЕЙТИНГ --------------------
+function schoolPercent(s){const fields=['name','short_name','locality','address','phone','email','director_name','students_total','classes_total','teachers_total','grade9_students','grade11_students','capacity','responsible_name'];return Math.round(fields.filter(k=>s[k]!==null&&s[k]!==undefined&&String(s[k]).trim()!=='').length/fields.length*100)}
+async function renderSchools(){const schools=await loadSchools(true);$('#content').innerHTML=`<div class="toolbar"><div class="filters"><input id="schoolSearch" placeholder="Поиск школы"></div><div class="actions">${isRoo()?'<button id="addSchool" class="primary" type="button">+ Добавить школу</button>':''}</div></div><div id="schoolCards"></div>`;const draw=()=>{const s=$('#schoolSearch').value.toLowerCase(),rows=schools.filter(x=>!s||`${x.name} ${x.locality||''}`.toLowerCase().includes(s));$('#schoolCards').innerHTML=rows.length?`<div class="cards">${rows.map(x=>`<article class="entity-card row-click" data-school="${x.id}"><div class="section-title"><h4>${esc(x.name)}</h4>${badge(x.profile_status)}</div><p>${esc(x.locality||'Населённый пункт не указан')}</p><div class="metric-row"><span>Ученики</span><b>${x.students_total??'—'}</b></div><div class="metric-row"><span>Педагоги</span><b>${x.teachers_total??'—'}</b></div><div class="small">Паспорт заполнен на ${schoolPercent(x)}%</div><div class="progress"><i style="width:${schoolPercent(x)}%"></i></div></article>`).join('')}</div>`:empty('Школы не найдены','Измените поиск или добавьте школу.');$$('[data-school]').forEach(b=>b.onclick=()=>openSchool(b.dataset.school));};draw();$('#schoolSearch').oninput=draw;if($('#addSchool'))$('#addSchool').onclick=()=>openSchool(null)}
+async function renderMySchool(){if(!me.school_id){$('#content').innerHTML=empty('Школа не назначена','Начальник РОО должен привязать ваш профиль к школе.');return}const s=queryError(await sb.from('schools').select('*').eq('id',me.school_id).single());$('#content').innerHTML=`<div class="toolbar"><div><h3 style="margin:0">${esc(s.name)}</h3><p class="small">Паспорт заполнен на ${schoolPercent(s)}%. Статус: ${esc(STATUS_LABELS[s.profile_status]||s.profile_status)}</p></div><button id="editMySchool" class="primary" type="button">Открыть паспорт</button></div><div class="grid cols-4"><article class="panel stat"><b>${s.students_total??'—'}</b><small>Учеников</small></article><article class="panel stat"><b>${s.teachers_total??'—'}</b><small>Педагогов</small></article><article class="panel stat"><b>${s.classes_total??'—'}</b><small>Классов</small></article><article class="panel stat"><b>${s.capacity??'—'}</b><small>Вместимость</small></article></div><div class="panel" style="margin-top:17px"><h3>Основные сведения</h3><div class="metric-list"><div class="metric-row"><span>Директор</span><b>${esc(s.director_name||'—')}</b></div><div class="metric-row"><span>Адрес</span><b>${esc(s.address||'—')}</b></div><div class="metric-row"><span>Ответственный</span><b>${esc(s.responsible_name||'—')}</b></div></div></div>`;$('#editMySchool').onclick=()=>openSchool(me.school_id,true)}
+async function openSchool(id,own=false){let s=id?queryError(await sb.from('schools').select('*').eq('id',id).single()):{};const history=id?await sb.from('school_history').select('*,profiles(full_name)').eq('school_id',id).order('created_at',{ascending:false}).limit(10):{data:[]};const editable=isRoo()||(me.role==='school_director'&&me.school_id===id);const f=(key,label,type='text')=>`<label>${label}<input data-school-field="${key}" type="${type}" value="${esc(s[key]??'')}" ${editable?'':'disabled'}></label>`;const c=(key,label)=>`<label><input data-school-check="${key}" type="checkbox" ${s[key]?'checked':''} ${editable?'':'disabled'} style="width:auto"> ${label}</label>`;modal(`<div class="section-title"><div><h2>${esc(s.name||'Новая школа')}</h2><span class="small">Заполненность паспорта: ${schoolPercent(s)}%</span></div>${s.profile_status?badge(s.profile_status):''}</div><div class="tabs" id="schoolTabs"><button type="button" class="tab active" data-stab="main">Основное</button><button type="button" class="tab" data-stab="students">Ученики</button><button type="button" class="tab" data-stab="infra">Инфраструктура</button><button type="button" class="tab" data-stab="history">История</button></div><section data-sp="main"><div class="grid cols-2">${f('name','Полное название')}${f('short_name','Краткое название')}${f('locality','Населённый пункт')}${f('address','Адрес')}${f('phone','Телефон')}${f('email','Электронная почта','email')}${f('website','Сайт')}${f('director_name','Ф.И.О. директора')}${f('deputy_names','Заместители')}${f('responsible_name','Ответственный за отчётность')}${f('responsible_phone','Телефон ответственного')}</div></section><section data-sp="students" hidden><div class="grid cols-3">${f('students_total','Всего учеников','number')}${f('classes_total','Количество классов','number')}${f('teachers_total','Педагогов','number')}${[1,2,3,4,5,6,7,8,9,10,11].map(n=>f(`grade${n}_students`,`${n} класс`, 'number')).join('')}</div></section><section data-sp="infra" hidden><div class="grid cols-2">${f('capacity','Проектная вместимость','number')}${f('shifts_count','Количество смен','number')}${f('internet_quality','Качество интернета')}${f('building_condition','Состояние здания')}${c('has_meals','Организовано питание')}${c('has_transport','Есть школьный транспорт')}</div><label>Примечание<textarea data-school-field="notes" ${editable?'':'disabled'}>${esc(s.notes||'')}</textarea></label></section><section data-sp="history" hidden>${(history.data||[]).length?`<div class="timeline">${history.data.map(h=>`<div class="timeline-item"><i></i><div><b>${esc(h.action)}</b><div class="small">${esc(h.profiles?.full_name||'')} · ${fmtDate(h.created_at,true)}</div></div></div>`).join('')}</div>`:empty('История пуста','Изменения паспорта появятся здесь.')}</section>${editable?`<div class="form-actions" style="margin-top:18px"><button id="saveSchool" class="primary" type="button">Сохранить</button>${me.role==='school_director'?'<button id="submitSchool" class="secondary" type="button">Отправить на утверждение</button>':''}${isRoo()&&id?'<button id="approveSchool" class="secondary" type="button">Утвердить паспорт</button>':''}</div>`:''}`);
+  $$('#schoolTabs [data-stab]').forEach(b=>b.onclick=()=>{$$('#schoolTabs [data-stab]').forEach(x=>x.classList.toggle('active',x===b));$$('[data-sp]').forEach(p=>p.hidden=p.dataset.sp!==b.dataset.stab)});if($('#saveSchool'))$('#saveSchool').onclick=()=>saveSchool(id,s);if($('#submitSchool'))$('#submitSchool').onclick=()=>saveSchool(id,s,'submitted');if($('#approveSchool'))$('#approveSchool').onclick=()=>saveSchool(id,s,'approved');
+}
+async function saveSchool(id,old,status){try{const payload={};$$('[data-school-field]').forEach(i=>payload[i.dataset.schoolField]=i.type==='number'?(i.value===''?null:Number(i.value)):i.value.trim());$$('[data-school-check]').forEach(i=>payload[i.dataset.schoolCheck]=i.checked);if(status)payload.profile_status=status;if(status==='approved'){payload.approved_by=me.id;payload.approved_at=new Date().toISOString()}let result;if(id)result=await sb.from('schools').update(payload).eq('id',id).select().single();else result=await sb.from('schools').insert(payload).select().single();const saved=queryError(result);await sb.from('school_history').insert({school_id:saved.id,changed_by:me.id,action:status==='approved'?'Паспорт утверждён':status==='submitted'?'Паспорт отправлен на утверждение':'Паспорт школы обновлён',snapshot:saved});await audit('Изменён паспорт школы','school',saved.id,{status:status||'saved'});cache.schools=null;toast('Данные школы сохранены');closeModal();if(currentPage==='schools')renderSchools();else renderMySchool()}catch(e){toast(e.message,'error')}}
+async function renderRating(){const r=await sb.from('school_performance_v27').select('*').order('rating',{ascending:false,nullsFirst:false});queryError(r);const rows=r.data||[];$('#content').innerHTML=`<div class="panel"><div class="section-title"><div><h3>Рейтинг школ</h3><p class="small">Рассчитывается только при наличии поручений: принятые ответы повышают показатель, возвраты и просрочки снижают.</p></div><button id="ratingCsv" class="secondary" type="button">Скачать CSV</button></div><div class="table-wrap"><table><thead><tr><th>№</th><th>Школа</th><th>Поручений</th><th>Принято</th><th>Возвратов</th><th>Просрочено</th><th>Рейтинг</th></tr></thead><tbody>${rows.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.school_name)}</td><td>${x.assigned_count}</td><td>${x.accepted_count}</td><td>${x.returned_count}</td><td>${x.overdue_count}</td><td>${x.rating==null?'—':`<b class="${x.rating>=80?'rating-good':x.rating>=60?'rating-mid':'rating-bad'}">${x.rating}%</b>`}</td></tr>`).join('')}</tbody></table></div></div>`;$('#ratingCsv').onclick=()=>download(new Blob(['Школа;Поручений;Принято;Возвратов;Просрочено;Рейтинг\n'+rows.map(x=>[x.school_name,x.assigned_count,x.accepted_count,x.returned_count,x.overdue_count,x.rating??''].join(';')).join('\n')],{type:'text/csv;charset=utf-8'}),'Рейтинг_школ.csv')}
+
+// -------------------- ЭКЗАМЕНЫ --------------------
+async function renderExams(){const docs=await sb.from('exam_documents').select('*').order('created_at',{ascending:false});queryError(docs);$('#content').innerHTML=`<div class="toolbar"><div><h3 style="margin:0">Анализ экзаменационных документов</h3><p class="small">DOCX, XLSX, XLS и CSV. Документ анализируется целиком, ошибки отдельных строк не сбрасывают результат.</p></div><div class="actions"><button id="examUpload" class="primary" type="button">+ Загрузить документ</button><button id="examHistory" class="secondary" type="button">История</button></div></div><div class="grid cols-4"><article class="panel stat"><b>${docs.data.length||'—'}</b><small>Документов</small></article><article class="panel stat"><b>${docs.data.reduce((a,x)=>a+(x.tables_count||0),0)||'—'}</b><small>Распознано таблиц</small></article><article class="panel stat"><b>${docs.data.reduce((a,x)=>a+(x.subjects_count||0),0)||'—'}</b><small>Предметных разделов</small></article><article class="panel stat"><b>${docs.data.reduce((a,x)=>a+(x.warnings_count||0),0)||'—'}</b><small>Замечаний к данным</small></article></div><div class="panel" style="margin-top:17px">${docs.data.length?`<div class="table-wrap"><table><thead><tr><th>Документ</th><th>Год</th><th>Экзамен</th><th>Таблиц</th><th>Проблем</th><th>Дата</th></tr></thead><tbody>${docs.data.map(x=>`<tr class="row-click" data-exam-doc="${x.id}"><td>${esc(x.title||x.file_name)}</td><td>${esc(x.academic_year||'—')}</td><td>${esc(x.exam_type||'—')}</td><td>${x.tables_count}</td><td>${x.warnings_count}</td><td>${fmtDate(x.created_at,true)}</td></tr>`).join('')}</tbody></table></div>`:empty('Документы ещё не загружены','Загрузите аналитическую справку ГИА, таблицу Excel или CSV.')}</div>`;$('#examUpload').onclick=openExamWizard;$('#examHistory').onclick=()=>showExamHistory(docs.data);$$('[data-exam-doc]').forEach(x=>x.onclick=()=>openSavedAnalysis(x.dataset.examDoc))}
+function openExamWizard(){modal(`<h2>Загрузка и анализ документа</h2><div class="steps"><div class="step active">1. Файл</div><div class="step">2. Распознавание</div><div class="step">3. Проверка</div><div class="step">4. Сохранение</div></div><div class="drop"><input id="examFile" type="file" accept=".docx,.xlsx,.xls,.csv"><p>Поддерживаются DOCX с таблицами и текстом, Excel и CSV.</p></div><div class="grid cols-2"><label>Учебный год<input id="examYear" value="2025/2026"></label><label>Тип экзамена<select id="examType"><option>ГИА</option><option>ЕГЭ</option><option>ОГЭ</option><option>ГВЭ</option></select></label></div><div class="form-actions"><button id="analyzeExam" class="primary" type="button">Проанализировать</button></div><div id="examPreview"></div>`);$('#analyzeExam').onclick=analyzeExamFile}
+async function analyzeExamFile(){const file=$('#examFile').files[0];if(!file){toast('Выберите файл','warn');return}const btn=$('#analyzeExam');setBusy(btn,true,'Анализируем…');try{if(!window.ROOAnalysisEngine)throw new Error('Модуль анализа не загрузился.');const extracted=await window.ROOAnalysisEngine.extractFile(file);const analysis=window.ROOAnalysisEngine.analyze({...extracted,fileName:file.name,academicYear:$('#examYear').value,examType:$('#examType').value});analysis.meta={...(analysis.meta||{}),fileName:file.name,academicYear:$('#examYear').value,examType:$('#examType').value,title:analysis.meta?.title||file.name,createdAt:new Date().toISOString()};cache.analysis={analysis,file};$('#examPreview').innerHTML=`<div class="analysis-shell">${window.ROOAnalysisEngine.renderDashboard(analysis)}</div><div class="form-actions" style="margin-top:15px"><button id="saveExamAnalysis" class="primary" type="button">Сохранить анализ</button><button id="exportExamDocx" class="secondary" type="button">Скачать DOCX</button><button id="exportExamXlsx" class="secondary" type="button">Скачать Excel</button></div>`;window.ROOAnalysisEngine.bindDashboard($('#examPreview'));$('#saveExamAnalysis').onclick=saveExamAnalysis;$('#exportExamDocx').onclick=()=>exportAnalysisDocx(analysis);$('#exportExamXlsx').onclick=()=>exportAnalysisXlsx(analysis)}catch(e){console.error(e);toast(e.message,'error')}finally{setBusy(btn,false)}}
+async function saveExamAnalysis(){const {analysis,file}=cache.analysis||{};if(!analysis)return;const path=`exam-analysis/${me.id}/${Date.now()}-${fileSafe(file.name)}`;let storagePath='';const up=await sb.storage.from('roo-exam-analysis').upload(path,file);if(!up.error)storagePath=path;const payload={file_name:file.name,title:analysis.meta?.title||file.name,academic_year:analysis.meta?.academicYear,exam_type:analysis.meta?.examType,storage_path:storagePath,analysis_json:analysis,tables_count:analysis.tables?.length||0,subjects_count:analysis.subjectResults?.length||0,warnings_count:analysis.warnings?.length||0,created_by:me.id};queryError(await sb.from('exam_documents').insert(payload));await audit('Загружен анализ экзаменов','exam_document','',{file:file.name});toast('Анализ сохранён');closeModal();renderExams()}
+async function openSavedAnalysis(id){const x=queryError(await sb.from('exam_documents').select('*').eq('id',id).single());const a=x.analysis_json;if(!a||!Object.keys(a).length){toast('В документе нет сохранённого анализа','warn');return}modal(`<div id="savedAnalysis" class="analysis-shell">${window.ROOAnalysisEngine.renderDashboard(a)}</div><div class="form-actions"><button id="savedDocx" class="primary" type="button">Скачать DOCX</button><button id="savedXlsx" class="secondary" type="button">Скачать Excel</button>${isRoo()?'<button id="deleteExam" class="danger" type="button">Удалить</button>':''}</div>`);window.ROOAnalysisEngine.bindDashboard($('#savedAnalysis'));$('#savedDocx').onclick=()=>exportAnalysisDocx(a);$('#savedXlsx').onclick=()=>exportAnalysisXlsx(a);if($('#deleteExam'))$('#deleteExam').onclick=async()=>{if(confirm('Удалить этот анализ?')){await sb.from('exam_documents').delete().eq('id',id);closeModal();renderExams()}}}
+function showExamHistory(rows){modal(`<h2>История анализов</h2><div class="table-wrap"><table><thead><tr><th>Файл</th><th>Год</th><th>Тип</th><th>Таблиц</th><th>Замечаний</th><th>Дата</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.file_name)}</td><td>${esc(x.academic_year||'')}</td><td>${esc(x.exam_type||'')}</td><td>${x.tables_count}</td><td>${x.warnings_count}</td><td>${fmtDate(x.created_at,true)}</td></tr>`).join('')}</tbody></table></div>`)}
+async function exportAnalysisDocx(a){if(window.ROODocxExporter)await window.ROODocxExporter.export(a,branding,`Анализ_${fileSafe(a.meta?.academicYear||'ГИА')}.docx`);else download(new Blob([makeAnalysisHtml(a)],{type:'application/msword'}),'Анализ.doc')}
+function exportAnalysisXlsx(a){if(!window.XLSX){toast('Модуль Excel не загрузился','error');return}const wb=XLSX.utils.book_new();const subjects=(a.subjectResults||[]).map(x=>({Предмет:x.subject,Участников:x.totals?.total||0,'5':x.totals?.count5||0,'4':x.totals?.count4||0,'3':x.totals?.count3||0,'2':x.totals?.count2||0,Сдали:x.totals?.passed||0,'Не сдали':x.totals?.failed||0,'Качество знаний':x.totals?.quality??'',Успеваемость:x.totals?.success??'','Средний балл':x.totals?.avg??''}));XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(subjects),'Предметы');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(a.schoolRanking||[]),'Школы');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(a.highScores||[]),'Высокие баллы');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet((a.warnings||[]).map(x=>({Проблема:typeof x==='string'?x:x.message||JSON.stringify(x)}))),'Проверка данных');XLSX.writeFile(wb,`Анализ_${fileSafe(a.meta?.academicYear||'ГИА')}.xlsx`)}
+function makeAnalysisHtml(a){return `<!doctype html><meta charset="utf-8"><h1>${esc(a.meta?.title||'Анализ экзаменов')}</h1>${window.ROOAnalysisEngine.renderDashboard(a)}`}
+
+// -------------------- ОТДЕЛЫ --------------------
+async function renderDepartments(){const [deps,perf,profiles]=await Promise.all([loadDepartments(true),sb.from('department_performance_v27').select('*'),loadProfiles(true)]);const map=new Map((perf.data||[]).map(x=>[x.department_id,x]));$('#content').innerHTML=`<div class="cards">${deps.map(d=>{const p=map.get(d.id)||{},staff=profiles.filter(x=>x.department_id===d.id);return `<article class="entity-card"><div class="section-title"><h4>${esc(d.name)}</h4><span class="rating-number ${p.rating==null?'':p.rating>=80?'rating-good':p.rating>=60?'rating-mid':'rating-bad'}">${p.rating==null?'—':p.rating+'%'}</span></div><p>${esc(d.email||'Почта не указана')}</p><div class="metric-row"><span>Сотрудников</span><b>${staff.length}</b></div><div class="metric-row"><span>Поручений</span><b>${p.assigned_count||0}</b></div><div class="metric-row"><span>Принято</span><b>${p.accepted_count||0}</b></div><div class="metric-row"><span>Просрочено</span><b>${p.overdue_count||0}</b></div><div class="small">${staff.map(x=>x.full_name).filter(Boolean).join(', ')||'Сотрудники не назначены'}</div></article>`}).join('')}</div>`}
+
+// -------------------- ОТЧЁТЫ --------------------
+async function renderReports(){const templates=queryError(await sb.from('report_templates').select('*').order('is_system',{ascending:false}));$('#content').innerHTML=`<div class="toolbar"><div><h3 style="margin:0">Конструктор отчётов</h3><p class="small">Выберите шаблон, период и формат. Данные будут собраны из системы.</p></div></div><div class="cards">${templates.map(t=>`<article class="entity-card"><h4>${esc(t.name)}</h4><p>${esc(t.config?.title||'Готовый шаблон')}</p><button class="primary" data-report="${t.report_type}" type="button">Сформировать</button></article>`).join('')}</div>`;$$('[data-report]').forEach(b=>b.onclick=()=>openReportBuilder(b.dataset.report))}
+function openReportBuilder(type){modal(`<h2>Формирование отчёта</h2><div class="grid cols-2"><label>Период с<input id="reportFrom" type="date" value="${new Date(new Date().getFullYear(),0,1).toISOString().slice(0,10)}"></label><label>по<input id="reportTo" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Формат<select id="reportFormat"><option value="html">PDF / печать</option><option value="xlsx">Excel</option><option value="doc">Word</option></select></label><label>Заголовок<input id="reportTitle" value="${esc(PAGE_META.reports[0])}"></label></div><button id="buildReport" class="primary" type="button">Сформировать</button>`);$('#buildReport').onclick=()=>buildReport(type)}
+async function buildReport(type){const from=$('#reportFrom').value,to=$('#reportTo').value,format=$('#reportFormat').value,title=$('#reportTitle').value||'Отчёт';let rows=[],headers=[];if(type==='tasks_summary'){const r=queryError(await sb.from('tasks').select('title,category,priority,status,due_at,created_at').gte('created_at',from).lte('created_at',to+'T23:59:59'));rows=r;headers=['title','category','priority','status','due_at','created_at']}else if(type==='departments_summary'){rows=queryError(await sb.from('department_performance_v27').select('*'));headers=Object.keys(rows[0]||{})}else if(type==='school_card'){rows=queryError(await sb.from('schools').select('*'));headers=['name','locality','students_total','teachers_total','grade9_students','grade11_students','profile_status']}else{const docs=queryError(await sb.from('exam_documents').select('*').gte('created_at',from).lte('created_at',to+'T23:59:59'));rows=docs.map(x=>({Документ:x.title||x.file_name,Год:x.academic_year,Экзамен:x.exam_type,Таблиц:x.tables_count,Замечаний:x.warnings_count}));headers=Object.keys(rows[0]||{})}if(format==='xlsx'&&window.XLSX){const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Отчёт');XLSX.writeFile(wb,`${fileSafe(title)}.xlsx`)}else{const table=`<table border="1" cellspacing="0" cellpadding="6"><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${headers.map(h=>`<td>${esc(r[h]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;const html=`<!doctype html><meta charset="utf-8"><style>body{font-family:Arial;padding:30px}h1{text-align:center}table{border-collapse:collapse;width:100%}th{background:#e8f2eb}</style><h1>${esc(title)}</h1><p>Период: ${esc(from)} — ${esc(to)}</p>${table}<p style="margin-top:50px">Начальник РОО __________________</p>`;if(format==='doc')download(new Blob([html],{type:'application/msword'}),`${fileSafe(title)}.doc`);else{const w=open();w.document.write(html);w.document.close();w.print()}}await audit('Сформирован отчёт','report',type,{from,to,format});closeModal()}
+
+// -------------------- КАЛЕНДАРЬ --------------------
+async function renderCalendar(){const start=new Date();start.setDate(1);const end=new Date(start.getFullYear(),start.getMonth()+1,0,23,59,59);const r=queryError(await sb.from('calendar_events').select('*').gte('starts_at',start.toISOString()).lte('starts_at',end.toISOString()).order('starts_at'));const by={};r.forEach(x=>{const k=new Date(x.starts_at).getDate();(by[k]??=[]).push(x)});const days=end.getDate(),offset=(start.getDay()+6)%7;$('#content').innerHTML=`<div class="toolbar"><h3>${start.toLocaleString('ru-RU',{month:'long',year:'numeric'})}</h3>${isRoo()?'<button id="newEvent" class="primary" type="button">+ Событие</button>':''}</div><div class="calendar-grid">${Array(offset).fill('<div></div>').join('')}${Array.from({length:days},(_,i)=>`<div class="calendar-day"><b>${i+1}</b>${(by[i+1]||[]).map(e=>`<div class="calendar-event" title="${esc(e.description||'')}">${esc(e.title)}</div>`).join('')}</div>`).join('')}</div>`;if($('#newEvent'))$('#newEvent').onclick=openEventCreate}
+async function openEventCreate(){const [schools,deps]=await Promise.all([loadSchools(),loadDepartments()]);modal(`<h2>Новое событие</h2><label>Название<input id="eventTitle"></label><div class="grid cols-2"><label>Начало<input id="eventStart" type="datetime-local" value="${isoLocal(new Date())}"></label><label>Окончание<input id="eventEnd" type="datetime-local"></label><label>Школа<select id="eventSchool"><option value="">Для всех</option>${schools.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label><label>Отдел<select id="eventDepartment"><option value="">Не выбран</option>${deps.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label></div><label>Описание<textarea id="eventDescription"></textarea></label><button id="saveEvent" class="primary" type="button">Сохранить</button>`);$('#saveEvent').onclick=async()=>{const p={title:$('#eventTitle').value,description:$('#eventDescription').value,event_type:'event',starts_at:new Date($('#eventStart').value).toISOString(),ends_at:$('#eventEnd').value?new Date($('#eventEnd').value).toISOString():null,school_id:$('#eventSchool').value||null,department_id:$('#eventDepartment').value||null,created_by:me.id};queryError(await sb.from('calendar_events').insert(p));closeModal();renderCalendar()}}
+
+// -------------------- ДОКУМЕНТЫ --------------------
+async function renderDocuments(){const r=queryError(await sb.from('documents').select('*,profiles(full_name),schools(name),departments(name)').order('created_at',{ascending:false}));$('#content').innerHTML=`<div class="toolbar"><div class="filters"><input id="docSearch" placeholder="Поиск документов"><select id="docCategory"><option value="">Все категории</option><option>Приказ</option><option>Письмо</option><option>Методические материалы</option><option>Отчёт</option><option>Протокол</option></select></div><button id="newDocument" class="primary" type="button">+ Документ</button></div><div id="documentsTable"></div>`;const draw=()=>{const s=$('#docSearch').value.toLowerCase(),c=$('#docCategory').value,rows=r.filter(x=>(!s||`${x.title} ${x.document_number||''}`.toLowerCase().includes(s))&&(!c||x.category===c));$('#documentsTable').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Название</th><th>Категория</th><th>№ / дата</th><th>Для кого</th><th>Автор</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.title)}</td><td>${esc(x.category||'—')}</td><td>${esc(x.document_number||'—')}<br>${fmtDate(x.document_date)}</td><td>${esc(x.schools?.name||x.departments?.name||x.visibility)}</td><td>${esc(x.profiles?.full_name||'')}</td><td>${x.storage_path?`<button class="link-btn" data-doc-download="${x.id}" type="button">Скачать</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:empty('Документов нет','Загрузите первый документ.');$$('[data-doc-download]').forEach(b=>b.onclick=()=>downloadDocument(b.dataset.docDownload));};draw();$('#docSearch').oninput=draw;$('#docCategory').onchange=draw;$('#newDocument').onclick=openDocumentCreate}
+async function openDocumentCreate(){const [schools,deps]=await Promise.all([loadSchools(),loadDepartments()]);modal(`<h2>Добавить документ</h2><div class="grid cols-2"><label>Название<input id="docTitle"></label><label>Категория<select id="docCat"><option>Приказ</option><option>Письмо</option><option>Методические материалы</option><option>Отчёт</option><option>Протокол</option><option>Другое</option></select></label><label>Номер<input id="docNumber"></label><label>Дата<input id="docDate" type="date"></label><label>Доступ<select id="docVisibility"><option value="all">Всем сотрудникам</option><option value="roo">Только РОО</option><option value="schools">Школам</option><option value="departments">Отделам</option><option value="private">Выбранной организации</option></select></label><label>Файл<input id="docFile" type="file"></label><label>Школа<select id="docSchool"><option value="">Не выбрана</option>${schools.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label><label>Отдел<select id="docDep"><option value="">Не выбран</option>${deps.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label></div><label>Описание<textarea id="docDescription"></textarea></label><button id="saveDocument" class="primary" type="button">Загрузить</button>`);$('#saveDocument').onclick=saveDocument}
+async function saveDocument(){const file=$('#docFile').files[0],title=$('#docTitle').value.trim();if(!title)throw new Error('Введите название');let path='',name='';if(file){path=`documents/${me.id}/${Date.now()}-${fileSafe(file.name)}`;queryError(await sb.storage.from('roo-documents').upload(path,file));name=file.name}const p={title,category:$('#docCat').value,document_number:$('#docNumber').value,document_date:$('#docDate').value||null,description:$('#docDescription').value,visibility:$('#docVisibility').value,school_id:$('#docSchool').value||null,department_id:$('#docDep').value||null,storage_path:path,file_name:name,created_by:me.id};queryError(await sb.from('documents').insert(p));await audit('Добавлен документ','document','',{title});closeModal();renderDocuments()}
+async function downloadDocument(id){const d=queryError(await sb.from('documents').select('*').eq('id',id).single());const r=await sb.storage.from('roo-documents').download(d.storage_path);if(r.error)throw r.error;download(r.data,d.file_name||'document')}
+
+// -------------------- ОБРАЩЕНИЯ --------------------
+async function renderAppeals(){const r=queryError(await sb.from('appeals').select('*,departments(name),profiles!appeals_assigned_to_fkey(full_name)').order('created_at',{ascending:false}));$('#content').innerHTML=`<div class="toolbar"><h3>Обращения граждан и организаций</h3><button id="newAppeal" class="primary" type="button">+ Новое обращение</button></div>${r.length?`<div class="table-wrap"><table><thead><tr><th>Номер</th><th>Тема</th><th>Заявитель</th><th>Отдел</th><th>Срок</th><th>Статус</th></tr></thead><tbody>${r.map(x=>`<tr class="row-click" data-appeal="${x.id}"><td>${esc(x.number||'—')}</td><td>${esc(x.subject)}</td><td>${esc(x.applicant_name||'')}</td><td>${esc(x.departments?.name||'')}</td><td>${fmtDate(x.due_at)}</td><td>${badge(x.status)}</td></tr>`).join('')}</tbody></table></div>`:empty('Обращений нет','Добавьте первое обращение.')}`;$('#newAppeal').onclick=()=>openAppeal();$$('[data-appeal]').forEach(b=>b.onclick=()=>openAppeal(b.dataset.appeal))}
+async function openAppeal(id){const deps=await loadDepartments();const a=id?queryError(await sb.from('appeals').select('*').eq('id',id).single()):{};modal(`<h2>${id?'Обращение':'Новое обращение'}</h2><div class="grid cols-2"><label>Номер<input id="appealNumber" value="${esc(a.number||'')}"></label><label>Заявитель<input id="appealApplicant" value="${esc(a.applicant_name||'')}"></label><label>Контакты<input id="appealContacts" value="${esc(a.applicant_contacts||'')}"></label><label>Срок<input id="appealDue" type="date" value="${a.due_at?String(a.due_at).slice(0,10):''}"></label><label>Отдел<select id="appealDep"><option value="">Не выбран</option>${deps.map(x=>`<option value="${x.id}" ${a.assigned_department_id===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label><label>Статус<select id="appealStatus">${['new','in_progress','answered','closed','returned'].map(s=>`<option value="${s}" ${a.status===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('')}</select></label></div><label>Тема<input id="appealSubject" value="${esc(a.subject||'')}"></label><label>Текст обращения<textarea id="appealMessage">${esc(a.message||'')}</textarea></label><label>Ответ<textarea id="appealResponse">${esc(a.response_text||'')}</textarea></label><button id="saveAppeal" class="primary" type="button">Сохранить</button>`);$('#saveAppeal').onclick=async()=>{const p={number:$('#appealNumber').value||null,applicant_name:$('#appealApplicant').value,applicant_contacts:$('#appealContacts').value,subject:$('#appealSubject').value,message:$('#appealMessage').value,status:$('#appealStatus').value,due_at:$('#appealDue').value?new Date($('#appealDue').value).toISOString():null,assigned_department_id:$('#appealDep').value||null,response_text:$('#appealResponse').value,created_by:a.created_by||me.id};queryError(id?await sb.from('appeals').update(p).eq('id',id):await sb.from('appeals').insert(p));closeModal();renderAppeals()}}
+
+// -------------------- СОВЕЩАНИЯ --------------------
+async function renderMeetings(){const r=queryError(await sb.from('meetings').select('*,meeting_decisions(*)').order('meeting_at',{ascending:false}));$('#content').innerHTML=`<div class="toolbar"><h3>Совещания и протоколы</h3>${isRoo()?'<button id="newMeeting" class="primary" type="button">+ Совещание</button>':''}</div><div class="cards">${r.map(x=>`<article class="entity-card row-click" data-meeting="${x.id}"><div class="section-title"><h4>${esc(x.title)}</h4>${badge(x.status)}</div><p>${fmtDate(x.meeting_at,true)} · ${esc(x.location||'')}</p><div class="metric-row"><span>Решений</span><b>${x.meeting_decisions?.length||0}</b></div></article>`).join('')||empty('Совещаний нет','Создайте план совещания.')}</div>`;if($('#newMeeting'))$('#newMeeting').onclick=()=>openMeeting();$$('[data-meeting]').forEach(b=>b.onclick=()=>openMeeting(b.dataset.meeting))}
+async function openMeeting(id){const m=id?queryError(await sb.from('meetings').select('*,meeting_decisions(*)').eq('id',id).single()):{};modal(`<h2>${id?'Совещание':'Новое совещание'}</h2><div class="grid cols-2"><label>Название<input id="meetingTitle" value="${esc(m.title||'')}"></label><label>Дата и время<input id="meetingAt" type="datetime-local" value="${m.meeting_at?isoLocal(m.meeting_at):isoLocal(new Date())}"></label><label>Место<input id="meetingLocation" value="${esc(m.location||'')}"></label><label>Статус<select id="meetingStatus">${['planned','held','cancelled'].map(s=>`<option value="${s}" ${m.status===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('')}</select></label></div><label>Повестка<textarea id="meetingAgenda">${esc(m.agenda||'')}</textarea></label><label>Протокол<textarea id="meetingMinutes">${esc(m.minutes_text||'')}</textarea></label><div class="section-title"><h3>Решения</h3><button id="addDecisionRow" class="secondary" type="button">+ Решение</button></div><div id="decisionRows">${(m.meeting_decisions||[]).map(d=>decisionRow(d)).join('')}</div><button id="saveMeeting" class="primary" type="button">Сохранить</button>`);$('#addDecisionRow').onclick=()=>$('#decisionRows').insertAdjacentHTML('beforeend',decisionRow({}));$('#saveMeeting').onclick=()=>saveMeeting(id,m)}
+function decisionRow(d){return `<div class="grid cols-3 decision-row"><label>Решение<input data-d="text" value="${esc(d.decision_text||'')}"></label><label>Ответственный<input data-d="responsible" value="${esc(d.responsible_name||'')}"></label><label>Срок<input data-d="due" type="date" value="${d.due_at?String(d.due_at).slice(0,10):''}"></label></div>`}
+async function saveMeeting(id,old){const p={title:$('#meetingTitle').value,meeting_at:new Date($('#meetingAt').value).toISOString(),location:$('#meetingLocation').value,status:$('#meetingStatus').value,agenda:$('#meetingAgenda').value,minutes_text:$('#meetingMinutes').value,created_by:old.created_by||me.id};const m=queryError(id?await sb.from('meetings').update(p).eq('id',id).select().single():await sb.from('meetings').insert(p).select().single());if(id)await sb.from('meeting_decisions').delete().eq('meeting_id',id);const ds=$$('.decision-row').map(r=>({meeting_id:m.id,decision_text:$('[data-d="text"]',r).value,responsible_name:$('[data-d="responsible"]',r).value,due_at:$('[data-d="due"]',r).value?new Date($('[data-d="due"]',r).value).toISOString():null})).filter(x=>x.decision_text);if(ds.length)queryError(await sb.from('meeting_decisions').insert(ds));closeModal();renderMeetings()}
+
+// -------------------- ПРОВЕРКИ --------------------
+async function renderInspections(){const r=queryError(await sb.from('inspections').select('*,schools(name)').order('planned_at',{ascending:false}));$('#content').innerHTML=`<div class="toolbar"><h3>Проверки образовательных организаций</h3>${isRoo()?'<button id="newInspection" class="primary" type="button">+ Проверка</button>':''}</div>${r.length?`<div class="table-wrap"><table><thead><tr><th>Школа</th><th>Проверка</th><th>Дата</th><th>Проверяющие</th><th>Статус</th></tr></thead><tbody>${r.map(x=>`<tr class="row-click" data-inspection="${x.id}"><td>${esc(x.schools?.name||'')}</td><td>${esc(x.title)}</td><td>${fmtDate(x.planned_at,true)}</td><td>${esc(x.inspectors||'')}</td><td>${badge(x.status)}</td></tr>`).join('')}</tbody></table></div>`:empty('Проверок нет','Создайте план проверки.')}`;if($('#newInspection'))$('#newInspection').onclick=()=>openInspection();$$('[data-inspection]').forEach(b=>b.onclick=()=>openInspection(b.dataset.inspection))}
+async function openInspection(id){const schools=await loadSchools();const x=id?queryError(await sb.from('inspections').select('*').eq('id',id).single()):{};modal(`<h2>${id?'Проверка':'Новая проверка'}</h2><div class="grid cols-2"><label>Школа<select id="inspectionSchool">${schools.map(s=>`<option value="${s.id}" ${x.school_id===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label><label>Название<input id="inspectionTitle" value="${esc(x.title||'')}"></label><label>Тип<input id="inspectionType" value="${esc(x.inspection_type||'')}"></label><label>Дата<input id="inspectionDate" type="datetime-local" value="${x.planned_at?isoLocal(x.planned_at):''}"></label><label>Проверяющие<input id="inspectionPeople" value="${esc(x.inspectors||'')}"></label><label>Статус<select id="inspectionStatus">${['planned','in_progress','completed','cancelled'].map(s=>`<option value="${s}" ${x.status===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('')}</select></label></div><label>Выявленные нарушения<textarea id="inspectionFindings">${esc(x.findings||'')}</textarea></label><label>Рекомендации<textarea id="inspectionRecommendations">${esc(x.recommendations||'')}</textarea></label>${isRoo()?'<button id="saveInspection" class="primary" type="button">Сохранить</button>':''}`);if($('#saveInspection'))$('#saveInspection').onclick=async()=>{const p={school_id:$('#inspectionSchool').value,title:$('#inspectionTitle').value,inspection_type:$('#inspectionType').value,planned_at:$('#inspectionDate').value?new Date($('#inspectionDate').value).toISOString():null,inspectors:$('#inspectionPeople').value,status:$('#inspectionStatus').value,findings:$('#inspectionFindings').value,recommendations:$('#inspectionRecommendations').value,created_by:x.created_by||me.id,completed_at:$('#inspectionStatus').value==='completed'?new Date().toISOString():null};queryError(id?await sb.from('inspections').update(p).eq('id',id):await sb.from('inspections').insert(p));closeModal();renderInspections()}}
+
+// -------------------- ПОЛЬЗОВАТЕЛИ --------------------
+async function renderUsers(){const rows=await loadProfiles(true);let visible=rows;if(me.role==='school_director')visible=rows.filter(x=>x.school_id===me.school_id);$('#content').innerHTML=`<div class="toolbar"><div class="filters"><input id="userSearch" placeholder="Поиск по Ф.И.О. или почте"><select id="userRoleFilter"><option value="">Все роли</option>${Object.entries(ROLE_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div></div><div id="usersTable"></div>`;const draw=()=>{const s=$('#userSearch').value.toLowerCase(),f=$('#userRoleFilter').value,rs=visible.filter(x=>(!s||`${x.full_name} ${x.email}`.toLowerCase().includes(s))&&(!f||x.role===f));$('#usersTable').innerHTML=`<div class="table-wrap"><table><thead><tr><th>Пользователь</th><th>Роль</th><th>Организация</th><th>Статус</th><th></th></tr></thead><tbody>${rs.map(x=>`<tr><td><b>${esc(x.full_name||'Без имени')}</b><br><span class="small">${esc(x.email||'')}</span></td><td>${esc(ROLE_LABELS[x.role]||x.role)}</td><td>${esc(x.schools?.name||x.departments?.name||'—')}</td><td>${badge(x.status)}</td><td>${canManageUsers()?`<button class="link-btn" data-user="${x.id}" type="button">Настроить</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;$$('[data-user]').forEach(b=>b.onclick=()=>openUser(b.dataset.user))};draw();$('#userSearch').oninput=draw;$('#userRoleFilter').onchange=draw}
+async function openUser(id){const u=(await loadProfiles()).find(x=>x.id===id);const [schools,deps]=await Promise.all([loadSchools(),loadDepartments()]);const allowed=me.role==='school_director'?['school_staff','school_director']:Object.keys(ROLE_LABELS).filter(x=>x!=='pending'||u.role==='pending');modal(`<h2>Настройка пользователя</h2><p><b>${esc(u.full_name||'')}</b><br>${esc(u.email||'')}</p><div class="grid cols-2"><label>Роль<select id="userRole">${allowed.map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${ROLE_LABELS[r]}</option>`).join('')}</select></label><label>Статус<select id="userStatus"><option value="pending" ${u.status==='pending'?'selected':''}>Ожидает</option><option value="active" ${u.status==='active'?'selected':''}>Активен</option><option value="blocked" ${u.status==='blocked'?'selected':''}>Заблокирован</option></select></label><label>Школа<select id="userSchool"><option value="">Не выбрана</option>${schools.map(s=>`<option value="${s.id}" ${u.school_id===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label><label>Отдел<select id="userDep"><option value="">Не выбран</option>${deps.map(d=>`<option value="${d.id}" ${u.department_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select></label></div><button id="saveUser" class="primary" type="button">Сохранить доступ</button>`);$('#saveUser').onclick=async()=>{const role=$('#userRole').value;let school_id=$('#userSchool').value||null,department_id=$('#userDep').value||null;if(role.startsWith('school_'))department_id=null;else if(role.startsWith('department_'))school_id=null;else if(role.startsWith('roo_')){school_id=null;department_id=null}queryError(await sb.from('profiles').update({role,status:$('#userStatus').value,school_id,department_id,updated_at:new Date().toISOString()}).eq('id',id));await audit('Назначена роль','profile',id,{role,status:$('#userStatus').value});cache.profiles=null;toast('Доступ обновлён');closeModal();renderUsers()}}
+
+// -------------------- ЖУРНАЛ --------------------
+async function renderAudit(){const r=queryError(await sb.from('audit_log').select('*,profiles(full_name,email)').order('created_at',{ascending:false}).limit(300));$('#content').innerHTML=`<div class="panel"><div class="section-title"><h3>Журнал действий</h3><button id="auditCsv" class="secondary" type="button">Скачать CSV</button></div><div class="table-wrap"><table><thead><tr><th>Дата</th><th>Пользователь</th><th>Действие</th><th>Объект</th><th>Подробности</th></tr></thead><tbody>${r.map(x=>`<tr><td>${fmtDate(x.created_at,true)}</td><td>${esc(x.profiles?.full_name||x.profiles?.email||'Система')}</td><td>${esc(x.action)}</td><td>${esc(x.entity_type||'')} ${esc(x.entity_id||'')}</td><td>${esc(JSON.stringify(x.details||{}))}</td></tr>`).join('')}</tbody></table></div></div>`;$('#auditCsv').onclick=()=>download(new Blob(['Дата;Пользователь;Действие;Объект;Подробности\n'+r.map(x=>[fmtDate(x.created_at,true),x.profiles?.full_name||x.profiles?.email||'',x.action,x.entity_type||'',JSON.stringify(x.details||{})].join(';')).join('\n')],{type:'text/csv;charset=utf-8'}),'Журнал_действий.csv')}
+
+// -------------------- НАСТРОЙКИ И ЛОГОТИП --------------------
+async function renderSettings(){if(me.role!=='roo_head'){ $('#content').innerHTML=empty('Нет доступа','Изменять настройки может только начальник РОО.');return}$('#content').innerHTML=`<div class="grid cols-2"><article class="panel"><h3>Фирменное оформление</h3><div class="brand-mark brand-mark-auth" id="settingsLogoPreview"><img id="settingsLogoImage" alt="Логотип" ${branding.logo_url?'':'hidden'} src="${esc(branding.logo_url||'')}"><span class="brand-fallback" ${branding.logo_url?'hidden':''}>РОО</span></div><label>Новый логотип<input id="brandingLogo" type="file" accept=".png,.jpg,.jpeg,.webp,.svg"></label><label>Фон логотипа<input id="brandingBackground" type="color" value="${normalizeColor(branding.background)}"></label><label>Внутренний отступ <input id="brandingPadding" type="range" min="0" max="30" value="${Number(branding.padding)||8}"></label><p class="small">PNG с прозрачностью сохраняется прозрачным. Для изображения с залитым фоном сайт определит цвет по краям и подберёт фон контейнера.</p></article><article class="panel"><h3>Название системы</h3><label>Короткое название<input id="brandingShort" value="${esc(branding.short_name||'')}"></label><label>Подзаголовок<input id="brandingSubtitle" value="${esc(branding.subtitle||'')}"></label><label>Полное название<textarea id="brandingFull">${esc(branding.full_name||'')}</textarea></label><div class="form-actions"><button id="saveBranding" class="primary" type="button">Сохранить</button><button id="removeLogo" class="danger" type="button">Удалить логотип</button></div></article></div>`;$('#brandingLogo').onchange=previewBrandingLogo;$('#brandingBackground').oninput=updateLogoPreview;$('#brandingPadding').oninput=updateLogoPreview;$('#saveBranding').onclick=saveBranding;if($('#removeLogo'))$('#removeLogo').onclick=removeLogo;updateLogoPreview()}
+function normalizeColor(v){const m=String(v||'').match(/^#([0-9a-f]{6})$/i);return m?m[0]:'#ffffff'}
+async function previewBrandingLogo(){const file=$('#brandingLogo').files[0];if(!file)return;const img=$('#settingsLogoImage'),fallback=$('.brand-fallback',$('#settingsLogoPreview'));img.src=URL.createObjectURL(file);img.hidden=false;fallback.hidden=true;try{const d=await window.ROOAnalysisEngine.detectLogoBackground(file);if(!d.transparent){const c=document.createElement('canvas').getContext('2d');c.fillStyle=d.background;$('#brandingBackground').value=rgbToHex(c.fillStyle)}}catch(_){}updateLogoPreview()}
+function rgbToHex(c){if(c.startsWith('#'))return c;const m=c.match(/\d+/g);return m?`#${m.slice(0,3).map(x=>Number(x).toString(16).padStart(2,'0')).join('')}`:'#ffffff'}
+function updateLogoPreview(){const p=$('#settingsLogoPreview');if(!p)return;p.style.background=$('#brandingBackground').value;p.style.padding=`${$('#brandingPadding').value}px`}
+async function saveBranding(){const file=$('#brandingLogo').files[0];let logo_url=branding.logo_url||'';if(file){const path=`branding/logo-${Date.now()}-${fileSafe(file.name)}`;const up=await sb.storage.from('roo-public').upload(path,file,{upsert:true});if(up.error)throw up.error;logo_url=sb.storage.from('roo-public').getPublicUrl(path).data.publicUrl}const value={logo_url,background:$('#brandingBackground').value,padding:Number($('#brandingPadding').value),short_name:$('#brandingShort').value,subtitle:$('#brandingSubtitle').value,full_name:$('#brandingFull').value};queryError(await sb.from('site_settings').upsert({key:'branding',value,updated_by:me.id,updated_at:new Date().toISOString()}));branding=value;applyBranding();toast('Оформление сохранено')}
+async function removeLogo(){branding.logo_url='';queryError(await sb.from('site_settings').upsert({key:'branding',value:branding,updated_by:me.id,updated_at:new Date().toISOString()}));applyBranding();renderSettings()}
+
+// -------------------- УВЕДОМЛЕНИЯ --------------------
+async function refreshNotifications(){if(!me)return;const r=await sb.from('notifications').select('id',{count:'exact',head:true}).eq('is_read',false);const n=r.count||0;$('#notificationCount').textContent=n;$('#notificationCount').hidden=!n}
+async function showNotifications(){const r=queryError(await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(50));modal(`<h2>Уведомления</h2>${r.length?`<div class="timeline">${r.map(x=>`<div class="timeline-item"><i></i><div><b>${esc(x.title)}</b><p>${esc(x.body||'')}</p><small>${fmtDate(x.created_at,true)}</small></div></div>`).join('')}</div>`:empty('Уведомлений нет','Новые события появятся здесь.')}<button id="readAll" class="secondary" type="button">Отметить всё прочитанным</button>`);$('#readAll').onclick=async()=>{await sb.from('notifications').update({is_read:true,read_at:new Date().toISOString()}).eq('is_read',false);refreshNotifications();closeModal()}}
+
+window.addEventListener('DOMContentLoaded',boot);
 })();

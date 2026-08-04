@@ -1,9 +1,8 @@
-name: Deploy ROO site to GitHub Pages
+name: Deploy ROO V27 to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -21,54 +20,29 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
       - name: Prepare public site
         shell: bash
         run: |
           set -euo pipefail
           rm -rf _site
           mkdir -p _site
-
-          required_files=(
-            index.html
-            app.css
-            app.js
-            config.js
-            analysis-engine.js
-            docx-export.js
-          )
-
-          for file in "${required_files[@]}"; do
-            if [[ ! -f "$file" ]]; then
-              echo "Required site file is missing: $file" >&2
-              exit 1
-            fi
+          required=(index.html app.css app.js config.js analysis-engine.js docx-export.js)
+          for file in "${required[@]}"; do
+            test -f "$file" || { echo "Missing $file" >&2; exit 1; }
             cp "$file" _site/
           done
-
-          if [[ -d templates ]]; then
-            cp -R templates _site/templates
-          fi
-
+          test -d assets && cp -R assets _site/assets || true
           cp index.html _site/404.html
           touch _site/.nojekyll
-
-          echo "Prepared files:"
-          find _site -maxdepth 3 -type f -print | sort
-
-      - name: Configure GitHub Pages
+      - name: Configure Pages
         uses: actions/configure-pages@v5
-
-      - name: Upload GitHub Pages artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: _site
-          include-hidden-files: true
-
-      - name: Deploy GitHub Pages
+      - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
