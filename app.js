@@ -170,6 +170,14 @@
     $('#app').hidden = true;
   }
 
+  function setAuthStatus(text = '', type = 'info') {
+    const element = $('#loginStatus');
+    if (!element) return;
+    element.textContent = text;
+    element.hidden = !text;
+    element.style.color = type === 'error' ? '#a12b2b' : type === 'success' ? '#13795b' : '#5f6f68';
+  }
+
   function bindAuth() {
     $$('.tab').forEach((button) => {
       button.onclick = async () => {
@@ -180,24 +188,73 @@
       };
     });
 
-    $('#loginForm').onsubmit = async (event) => {
+    const loginForm = $('#loginForm');
+    loginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const { error } = await sb.auth.signInWithPassword({
-        email: $('#loginEmail').value.trim(),
-        password: $('#loginPassword').value
-      });
-      if (error) {
-        const message = String(error.message || 'Ошибка входа');
-        if (/invalid login credentials/i.test(message)) {
-          return toast('Неверная почта или пароль. Проверьте аккаунт либо нажмите «Забыли пароль?».', 5500);
-        }
-        if (/email not confirmed/i.test(message)) {
-          return toast('Почта ещё не подтверждена. Откройте письмо Supabase и подтвердите регистрацию.', 5500);
-        }
-        return toast(message);
+      event.stopPropagation();
+
+      const email = $('#loginEmail').value.trim();
+      const password = $('#loginPassword').value;
+      const button = $('#loginSubmit');
+      if (!email || !password) {
+        loginForm.reportValidity();
+        return;
       }
-      location.reload();
-    };
+
+      button.disabled = true;
+      button.textContent = 'Входим…';
+      setAuthStatus('Проверяем почту и пароль…');
+
+      try {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) {
+          const message = String(error.message || 'Ошибка входа');
+          if (/invalid login credentials/i.test(message)) {
+            setAuthStatus('Неверная почта или пароль. Проверьте данные или восстановите пароль.', 'error');
+            toast('Неверная почта или пароль.', 5000);
+            return;
+          }
+          if (/email not confirmed/i.test(message)) {
+            setAuthStatus('Почта ещё не подтверждена. Откройте письмо Supabase.', 'error');
+            toast('Подтвердите почту через письмо Supabase.', 5500);
+            return;
+          }
+          setAuthStatus(message, 'error');
+          toast(message, 5000);
+          return;
+        }
+
+        const user = data?.user || data?.session?.user;
+        if (!user) throw new Error('Supabase подтвердил вход, но не вернул пользователя.');
+
+        // V26.3.5 repairs profiles for accounts that existed before the clean migration.
+        // A missing RPC does not block an already valid profile.
+        let repairError = null;
+        try {
+          const repair = await sb.rpc('ensure_my_profile');
+          repairError = repair.error || null;
+        } catch (error) {
+          repairError = error;
+        }
+
+        const entered = await enter(user, { quietMissing: true });
+        if (!entered) {
+          const detail = repairError?.message ? ` (${repairError.message})` : '';
+          setAuthStatus(`Вход подтверждён, но профиль сотрудника не создан. Выполните PATCH_V26_3_5_LOGIN_PROFILE.sql${detail}`, 'error');
+          toast('Вход подтверждён, но профиль сотрудника не найден.', 6500);
+          return;
+        }
+
+        setAuthStatus('Вход выполнен.', 'success');
+      } catch (error) {
+        console.error(error);
+        setAuthStatus(error.message || 'Не удалось выполнить вход.', 'error');
+        toast(error.message || 'Не удалось выполнить вход', 5500);
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Войти';
+      }
+    });
 
     const forgotPassword = $('#forgotPassword');
     if (forgotPassword) {
@@ -289,11 +346,16 @@
     }
   }
 
-  async function enter(user) {
-    const { data, error } = await sb.from('profiles').select('*').eq('id', user.id).single();
+  async function enter(user, options = {}) {
+    const { data, error } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
     if (error || !data) {
       showAuth();
-      return toast('Профиль ещё создаётся. Обновите страницу через несколько секунд.');
+      if (!options.quietMissing) {
+        const detail = error?.message ? `: ${error.message}` : '';
+        setAuthStatus(`Вход подтверждён, но профиль сотрудника недоступен${detail}`, 'error');
+        toast('Профиль сотрудника не найден. Запустите исправление V26.3.5.', 6000);
+      }
+      return false;
     }
     me = data;
     $('#auth').hidden = true;
@@ -303,6 +365,7 @@
     $('#avatar').textContent = (me.full_name || user.email).split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
     renderNav();
     await navigate(roleMenus[me.role]?.[0] || 'pending');
+    return true;
   }
 
   function renderNav() {
