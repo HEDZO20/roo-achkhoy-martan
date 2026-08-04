@@ -166,8 +166,29 @@
   }
 
   function showAuth() {
-    $('#auth').hidden = false;
-    $('#app').hidden = true;
+    const auth = $('#auth');
+    const app = $('#app');
+    if (auth) {
+      auth.hidden = false;
+      auth.style.display = 'grid';
+    }
+    if (app) {
+      app.hidden = true;
+      app.style.display = 'none';
+    }
+  }
+
+  function showApp() {
+    const auth = $('#auth');
+    const app = $('#app');
+    if (auth) {
+      auth.hidden = true;
+      auth.style.display = 'none';
+    }
+    if (app) {
+      app.hidden = false;
+      app.style.display = 'grid';
+    }
   }
 
   function setAuthStatus(text = '', type = 'info') {
@@ -358,8 +379,7 @@
       return false;
     }
     me = data;
-    $('#auth').hidden = true;
-    $('#app').hidden = false;
+    showApp();
     $('#userName').textContent = me.full_name || user.email;
     $('#userRole').textContent = roleNames[me.role] || 'Роль не назначена';
     $('#avatar').textContent = (me.full_name || user.email).split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();

@@ -30,3 +30,6 @@
 button:disabled{opacity:.55;cursor:not-allowed}
 .school-card small{color:var(--muted)}
 @media print{.analysis-tabs,.analysis-upload-card{display:none!important}}
+
+/* V26.3.6: hidden must always win over component display rules */
+[hidden]{display:none!important}
