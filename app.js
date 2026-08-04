@@ -191,7 +191,13 @@
         password: $('#regPassword').value,
         options: { data: metadata }
       });
-      if (error) return toast(error.message);
+      if (error) {
+        const message = String(error.message || 'Ошибка регистрации');
+        if (/приглаш|administrator|admin/i.test(message)) {
+          return toast('На сервере осталась старая проверка приглашений. Выполните PATCH_V26_3_REMOVE_INVITE_GATE.sql.');
+        }
+        return toast(message);
+      }
       modal('<h2>Заявка отправлена</h2><p>Подтвердите почту. После этого начальник РОО назначит вам роль и организацию.</p>');
     };
 
