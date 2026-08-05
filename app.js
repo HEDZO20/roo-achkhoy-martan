@@ -45,7 +45,7 @@ async function boot(){
   try{
     const c=window.ROO_CONFIG||{};
     if(!window.supabase)throw new Error('Библиотека Supabase не загрузилась. Проверьте интернет или доступ к CDN.');
-    if(!c.supabaseUrl||c.supabaseUrl.includes('YOUR-PROJECT'))throw new Error('Сайт не настроен: заполните config.js через установщик V27.');
+    if(!c.supabaseUrl||c.supabaseUrl.includes('YOUR-PROJECT'))throw new Error('Сайт не настроен: заполните config.js через установщик V28.3.');
     sb=window.supabase.createClient(c.supabaseUrl,c.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
     bindBase();await loadBranding();await loadRegisterUnits();
     const {data}=await sb.auth.getSession(); session=data.session;
@@ -261,6 +261,511 @@ async function removeLogo(){branding.logo_url='';queryError(await sb.from('site_
 // -------------------- УВЕДОМЛЕНИЯ --------------------
 async function refreshNotifications(){if(!me)return;const r=await sb.from('notifications').select('id',{count:'exact',head:true}).eq('is_read',false);const n=r.count||0;$('#notificationCount').textContent=n;$('#notificationCount').hidden=!n}
 async function showNotifications(){const r=queryError(await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(50));modal(`<h2>Уведомления</h2>${r.length?`<div class="timeline">${r.map(x=>`<div class="timeline-item"><i></i><div><b>${esc(x.title)}</b><p>${esc(x.body||'')}</p><small>${fmtDate(x.created_at,true)}</small></div></div>`).join('')}</div>`:empty('Уведомлений нет','Новые события появятся здесь.')}<button id="readAll" class="secondary" type="button">Отметить всё прочитанным</button>`);$('#readAll').onclick=async()=>{await sb.from('notifications').update({is_read:true,read_at:new Date().toISOString()}).eq('is_read',false);refreshNotifications();closeModal()}}
+
+
+/* ==================== V28 FINAL AUDIT OVERRIDES ==================== */
+ROLE_MENUS.roo_deputy = ROLE_MENUS.roo_deputy.filter(page => page !== 'users');
+ROLE_MENUS.school_director = ROLE_MENUS.school_director.filter(page => page !== 'users');
+canManageUsers = function(){ return me?.role === 'roo_head'; };
+
+let calendarCursorV28 = new Date();
+let activeAnalysisViewV28 = null;
+
+function showAppV28(){
+  const auth=$('#auth'), app=$('#app');
+  if(auth){auth.hidden=true;auth.style.display='none'}
+  if(app){app.hidden=false;app.style.display='grid'}
+}
+
+showAuth = function(){
+  const auth=$('#auth'), app=$('#app');
+  if(app){app.hidden=true;app.style.display='none'}
+  if(auth){auth.hidden=false;auth.style.display='grid'}
+  if($('#loginMessage')) $('#loginMessage').textContent='';
+};
+
+applyBranding = function(){
+  $('#authBrandTitle').textContent=branding.full_name||branding.short_name||'Отдел образования';
+  $('#brandShortName').textContent=branding.short_name||'Ачхой-Мартан';
+  $('#brandSubtitle').textContent=branding.subtitle||'Отдел образования';
+  document.title=branding.full_name||'Система РОО';
+  for(const [imgId,markId] of [['authBrandImage','authBrandMark'],['sideBrandImage','sideBrandMark']]){
+    const img=$(`#${imgId}`),mark=$(`#${markId}`),fallback=$('.brand-fallback',mark);
+    const padding=Number(branding.padding);
+    mark.style.background=branding.background||'#fff';
+    mark.style.padding=`${Number.isFinite(padding)?Math.max(0,padding):8}px`;
+    const fallbackMode=()=>{img.hidden=true;img.removeAttribute('src');fallback.hidden=false;};
+    if(branding.logo_url){
+      img.onload=()=>{img.hidden=false;fallback.hidden=true};
+      img.onerror=fallbackMode;
+      img.src=branding.logo_url;
+    }else fallbackMode();
+  }
+};
+
+loadRegisterUnits = async function(){
+  if(!sb)return;
+  const place=$('#regPlace'), unit=$('#regUnit');
+  const update=async()=>{
+    unit.disabled=true;unit.innerHTML='<option value="">Загрузка списка…</option>';
+    try{
+      let result=await sb.rpc('registration_units_v28',{unit_type:place.value});
+      if(result.error){
+        const table=place.value==='school'?'schools':'departments';
+        result=await sb.from(table).select('id,name').order('name');
+      }
+      if(result.error)throw result.error;
+      const rows=result.data||[];
+      unit.innerHTML='<option value="">Выберите организацию</option>'+rows.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
+    }catch(error){
+      unit.innerHTML='<option value="">Список временно недоступен</option>';
+      console.error(error);
+    }finally{unit.disabled=false}
+  };
+  place.onchange=update;await update();
+};
+
+ensureProfile = async function(user){
+  let result=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+  if(result.error)throw result.error;
+  if(!result.data){
+    const repair=await sb.rpc('ensure_my_profile_v28');
+    if(repair.error)throw repair.error;
+    result=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+  }
+  if(!result.data)throw new Error('Профиль сотрудника не создан. Выполните финальный SQL V28.');
+  return result.data;
+};
+
+enter = async function(user){
+  me=await ensureProfile(user);
+  if(me.status==='blocked'){
+    await sb.auth.signOut();
+    showAuth();
+    $('#loginMessage').textContent='Учётная запись заблокирована администратором.';
+    return false;
+  }
+  showAppV28();
+  $('#userName').textContent=me.full_name||me.email;
+  $('#userRole').textContent=ROLE_LABELS[me.role]||me.role;
+  $('#avatar').textContent=initials(me.full_name||me.email);
+  renderNav();await refreshNotifications();await navigate((ROLE_MENUS[me.role]||['pending'])[0]);
+  return true;
+};
+
+login = async function(e){
+  e.preventDefault();
+  const btn=$('button[type="submit"]',e.currentTarget);setBusy(btn,true,'Входим…');$('#loginMessage').textContent='';
+  try{
+    const email=$('#loginEmail').value.trim(),password=$('#loginPassword').value;
+    if(!email||!password)throw new Error('Введите почту и пароль.');
+    const result=await sb.auth.signInWithPassword({email,password});if(result.error)throw result.error;
+    session=result.data.session;await enter(result.data.user);
+  }catch(error){
+    console.error(error);
+    const message=String(error.message||'Ошибка входа');
+    $('#loginMessage').textContent=/invalid login credentials/i.test(message)?'Неверная почта или пароль.':/email not confirmed/i.test(message)?'Подтвердите почту через письмо, затем повторите вход.':message;
+  }finally{setBusy(btn,false)}
+};
+
+navigate = async function(page){
+  if($('#modal')?.open)closeModal();
+  activeAnalysisViewV28=null;
+  currentPage=page;
+  $$('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
+  $('#pageTitle').textContent=PAGE_META[page]?.[0]||page;
+  $('#crumb').textContent=branding.short_name||'Рабочая система РОО';
+  $('.sidebar').classList.remove('open');
+  const fn={dashboard:renderDashboard,pending:renderPending,tasks:renderTasks,schools:renderSchools,school:renderMySchool,rating:renderRating,exams:renderExams,departments:renderDepartments,reports:renderReports,calendar:renderCalendar,documents:renderDocuments,appeals:renderAppeals,meetings:renderMeetings,inspections:renderInspections,users:renderUsers,audit:renderAudit,settings:renderSettings}[page]||renderDashboard;
+  $('#content').innerHTML='<div class="empty">Загрузка…</div>';
+  try{await fn();window.scrollTo({top:0,behavior:'auto'})}catch(error){console.error(error);$('#content').innerHTML=empty('Раздел временно недоступен',error.message||'Ошибка загрузки')}
+};
+
+renderDashboard = async function(){
+  const [tasks,schools,docs,appeals,pending,notifications]=await Promise.all([
+    count('tasks'),count('schools'),count('documents'),count('appeals',q=>q.neq('status','closed')),isRoo()?count('profiles',q=>q.eq('role','pending')):0,count('notifications',q=>q.eq('is_read',false))
+  ]);
+  const dueResult=await sb.from('task_recipients').select('id,status,updated_at,tasks(title,due_at)').order('updated_at',{ascending:false}).limit(40);
+  const recent=await sb.from('audit_log').select('action,entity_type,created_at,profiles(full_name)').order('created_at',{ascending:false}).limit(8);
+  const attention=(dueResult.data||[]).filter(x=>!['accepted','cancelled'].includes(x.status)).slice(0,12);
+  $('#content').innerHTML=`<div class="grid cols-4">
+    <article class="panel stat"><b>${tasks??0}</b><small>Поручения</small></article><article class="panel stat"><b>${schools??0}</b><small>Школы</small></article><article class="panel stat"><b>${docs??0}</b><small>Документы</small></article><article class="panel stat"><b>${appeals??0}</b><small>Открытые обращения</small></article>
+  </div><div class="split top-gap"><article class="panel"><div class="section-title"><h3>Что требует внимания</h3></div>${pending?`<div class="notice warn">Пользователей без роли: <b>${pending}</b>. <button class="link-btn" data-go="users" type="button">Открыть</button></div>`:''}${notifications?`<div class="notice info">Непрочитанных уведомлений: <b>${notifications}</b>.</div>`:''}${attention.length?`<div class="metric-list">${attention.map(x=>{const overdue=x.tasks?.due_at&&new Date(x.tasks.due_at)<new Date();return `<div class="metric-row"><span><b>${esc(x.tasks?.title||'Поручение')}</b><small>${fmtDate(x.tasks?.due_at,true)}</small></span><span>${overdue?'<span class="badge danger">Просрочено</span>':badge(x.status)}</span></div>`}).join('')}</div>`:empty('Нет срочных пунктов','Новые поручения и сроки появятся здесь.')}</article><article class="panel"><h3>Последние действия</h3>${(recent.data||[]).length?`<div class="timeline">${recent.data.map(x=>`<div class="timeline-item"><i></i><div><b>${esc(x.action)}</b><div class="small">${esc(x.profiles?.full_name||'Система')} · ${fmtDate(x.created_at,true)}</div></div></div>`).join('')}</div>`:empty('Журнал пуст','Действия пользователей появятся после работы в системе.')}</article></div>`;
+  $$('[data-go]').forEach(b=>b.onclick=()=>navigate(b.dataset.go));
+};
+
+openTask = async function(id){
+  const task=queryError(await sb.from('tasks').select('*,profiles!tasks_created_by_fkey(full_name),task_recipients(*,schools(name),departments(name))').eq('id',id).single());
+  let recipient=me._viewRecipient||(task.task_recipients||[]).find(r=>(me.school_id&&r.school_id===me.school_id)||(me.department_id&&r.department_id===me.department_id));
+  if(isRoo()&&!recipient)recipient=(task.task_recipients||[])[0];
+  const rid=recipient?.id;
+  let responsesPromise=Promise.resolve({data:[]}), commentsPromise=Promise.resolve({data:[]}), filesPromise=Promise.resolve({data:[]});
+  if(rid){
+    let responseQuery=sb.from('task_responses').select('*,profiles!task_responses_author_id_fkey(full_name)').eq('task_id',id);
+    responseQuery=recipient.school_id?responseQuery.eq('school_id',recipient.school_id):responseQuery.eq('department_id',recipient.department_id);
+    responsesPromise=responseQuery.order('created_at',{ascending:false});
+    commentsPromise=sb.from('task_comments').select('*,profiles(full_name)').eq('task_id',id).eq('recipient_id',rid).order('created_at');
+    filesPromise=sb.from('attachments').select('*').eq('entity_type','task').eq('entity_id',id).eq('recipient_id',rid).order('created_at');
+  }
+  const [responses,comments,files]=await Promise.all([responsesPromise,commentsPromise,filesPromise]);
+  queryError(responses);queryError(comments);queryError(files);
+  const statuses=['new','in_progress','director_review','roo_review','accepted'];
+  const active=Math.max(0,statuses.indexOf(recipient?.status||task.status));
+  const recipientOptions=isRoo()?`<label>Получатель<select id="taskRecipientSelect">${(task.task_recipients||[]).map(r=>`<option value="${r.id}" ${r.id===rid?'selected':''}>${esc(r.schools?.name||r.departments?.name||'Получатель')} — ${esc(STATUS_LABELS[r.status]||r.status)}</option>`).join('')}</select></label>`:'';
+  modal(`<div class="section-title"><div class="min-zero"><span class="badge">${esc(task.category||'Поручение')}</span><h2>${esc(task.title)}</h2></div>${badge(recipient?.status||task.status)}</div><p class="pre-wrap">${esc(task.description||'')}</p>${task.instructions?`<div class="notice info"><b>Обязательные требования</b><div class="pre-wrap">${esc(task.instructions)}</div></div>`:''}<div class="small">Срок: ${fmtDate(task.due_at,true)} · Автор: ${esc(task.profiles?.full_name||'')}</div>${recipientOptions}<div class="workflow">${statuses.map((status,index)=>`<div class="workflow-step ${index<active?'done':index===active?'active':''}">${STATUS_LABELS[status]}</div>`).join('')}</div><div class="split"><div><div class="panel flat"><h3>Ответ и файлы</h3><label>Текст ответа<textarea id="taskResponseText">${esc(responses.data?.[0]?.response_text||responses.data?.[0]?.text||'')}</textarea></label><label>Приложить файлы<input id="taskFiles" type="file" multiple></label><div class="file-list">${(files.data||[]).map(file=>`<div class="file-item"><span>📎 ${esc(file.file_name)}</span><button type="button" class="link-btn" data-download="${file.id}">Открыть</button></div>`).join('')||'<span class="small">Файлов пока нет</span>'}</div><div class="form-actions top-gap-sm">${taskActionButtons(task,recipient)}</div></div><div class="panel flat top-gap-sm"><h3>Комментарии</h3><div class="timeline">${(comments.data||[]).map(comment=>`<div class="timeline-item"><i></i><div><b>${esc(comment.profiles?.full_name||'Пользователь')}</b><p class="pre-wrap">${esc(comment.message)}</p><small>${fmtDate(comment.created_at,true)}</small></div></div>`).join('')||'<span class="small">Комментариев пока нет</span>'}</div><div class="inline-actions"><input id="taskComment" placeholder="Добавить комментарий"><button id="addTaskComment" class="secondary" type="button">Отправить</button></div></div></div><aside><div class="panel flat"><h3>Получатели</h3>${(task.task_recipients||[]).map(r=>`<div class="metric-row"><span>${esc(r.schools?.name||r.departments?.name||'')}</span>${badge(r.status)}</div>`).join('')}</div><div class="panel flat top-gap-sm"><h3>Версии ответа</h3>${(responses.data||[]).map(response=>`<div class="notice"><b>Версия ${response.version_no||1}</b><div class="small">${esc(response.profiles?.full_name||'')} · ${fmtDate(response.created_at,true)}</div></div>`).join('')||'<span class="small">Нет сохранённых версий</span>'}</div></aside></div>`);
+  if($('#taskRecipientSelect'))$('#taskRecipientSelect').onchange=()=>openTaskRecipient(task,$('#taskRecipientSelect').value);
+  bindTaskActions(task,recipient);
+  if($('#addTaskComment'))$('#addTaskComment').onclick=()=>addTaskComment(task.id,recipient?.id);
+  $$('[data-download]').forEach(b=>b.onclick=async()=>{try{await downloadAttachment(b.dataset.download)}catch(error){toast(error.message,'error')}});
+};
+
+taskActionButtons = function(task,recipient){
+  if(!recipient)return isRoo()?'<span class="small">Выберите получателя.</span>':'';
+  const status=recipient.status;
+  const worker=['school_staff','school_director','department_staff','department_head'].includes(me.role);
+  let html=worker?'<button id="saveTaskDraft" class="ghost" type="button">Сохранить черновик</button>':'';
+  if(worker){
+    if(status==='new')html+='<button id="acceptTask" class="secondary" type="button">Принять в работу</button>';
+    if(['new','in_progress','returned'].includes(status))html+='<button id="submitTask" class="primary" type="button">Отправить ответ</button>';
+    if(me.role==='school_director'&&status==='director_review')html+='<button id="directorApprove" class="primary" type="button">Подтвердить директором</button><button id="directorReturn" class="danger" type="button">Вернуть сотруднику</button>';
+  }
+  if(isRoo()&&status==='roo_review')html+='<button id="rooAccept" class="primary" type="button">Принять отчёт</button><button id="rooReturn" class="danger" type="button">Вернуть на исправление</button>';
+  return html||'<span class="small">Доступных действий нет.</span>';
+};
+
+bindTaskActions = function(task,recipient){
+  if(!recipient)return;
+  const changeStatus=async(status,comment='')=>{
+    try{
+      const update={status,last_comment:comment||null};
+      if(status==='in_progress'){update.accepted_at=new Date().toISOString();update.accepted_by=me.id}
+      if(status==='director_review')update.submitted_at=new Date().toISOString();
+      if(status==='roo_review'){update.director_reviewed_at=new Date().toISOString();update.director_reviewed_by=me.id}
+      if(status==='accepted'){update.roo_reviewed_at=new Date().toISOString();update.roo_reviewed_by=me.id;update.completed_at=new Date().toISOString()}
+      queryError(await sb.from('task_recipients').update(update).eq('id',recipient.id));
+      await audit('Изменён статус поручения','task',task.id,{status,recipient:recipient.id});
+      toast('Статус обновлён');await openTask(task.id);
+    }catch(error){toast(error.message,'error')}
+  };
+  if($('#saveTaskDraft'))$('#saveTaskDraft').onclick=()=>saveTaskResponse(task,recipient,{status:'draft',notify:true,requireContent:false});
+  if($('#acceptTask'))$('#acceptTask').onclick=()=>changeStatus('in_progress');
+  if($('#submitTask'))$('#submitTask').onclick=async()=>{
+    try{
+      await saveTaskResponse(task,recipient,{status:'submitted',notify:false,requireContent:true});
+      await changeStatus((recipient.school_id&&task.requires_director_approval&&me.role!=='school_director')?'director_review':'roo_review');
+    }catch(error){toast(error.message,'error')}
+  };
+  if($('#directorApprove'))$('#directorApprove').onclick=()=>changeStatus('roo_review');
+  if($('#directorReturn'))$('#directorReturn').onclick=()=>changeStatus('returned','Возвращено директором');
+  if($('#rooAccept'))$('#rooAccept').onclick=()=>changeStatus('accepted');
+  if($('#rooReturn'))$('#rooReturn').onclick=()=>{const comment=prompt('Причина возврата:')?.trim();if(comment)changeStatus('returned',comment)};
+};
+
+saveTaskResponse = async function(task,recipient,options={}){
+  const text=$('#taskResponseText')?.value.trim()||'';
+  const files=[...($('#taskFiles')?.files||[])];
+  if(options.requireContent&&!text&&!files.length)throw new Error('Введите текст ответа или приложите хотя бы один файл.');
+  if(!text&&!files.length){if(options.notify)toast('Нет изменений для сохранения','warn');return false}
+  let previous=sb.from('task_responses').select('version_no').eq('task_id',task.id);
+  previous=recipient.school_id?previous.eq('school_id',recipient.school_id):previous.eq('department_id',recipient.department_id);
+  const prev=await previous.order('version_no',{ascending:false}).limit(1);
+  if(prev.error)throw prev.error;
+  const version=(prev.data?.[0]?.version_no||0)+1;
+  queryError(await sb.from('task_responses').insert({task_id:task.id,author_id:me.id,school_id:recipient.school_id||null,department_id:recipient.department_id||null,text,response_text:text,status:options.status||'draft',version_no:version}));
+  for(const file of files)await uploadAttachment('task',task.id,file,recipient.id);
+  if(options.notify)toast('Черновик сохранён');
+  return true;
+};
+
+uploadAttachment = async function(entityType,entityId,file,recipientId=null){
+  if(file.size>50*1024*1024)throw new Error(`Файл «${file.name}» больше 50 МБ.`);
+  const path=`${me.id}/${entityType}/${entityId}/${Date.now()}-${fileSafe(file.name)}`;
+  const upload=await sb.storage.from('roo-documents').upload(path,file,{upsert:false});if(upload.error)throw upload.error;
+  queryError(await sb.from('attachments').insert({entity_type:entityType,entity_id:entityId,recipient_id:recipientId,bucket_id:'roo-documents',storage_path:path,file_name:file.name,mime_type:file.type,size_bytes:file.size,uploaded_by:me.id}));
+};
+
+function renderExamListV28(docs){
+  $('#content').innerHTML=`<div class="toolbar"><div class="min-zero"><h3>Анализ экзаменационных документов</h3><p class="small">DOCX, XLSX, XLS и CSV. Анализ открывается как полноценная страница без вложенной прокрутки.</p></div><div class="actions"><button id="examUpload" class="primary" type="button">+ Загрузить документ</button><button id="examHistory" class="secondary" type="button">История</button></div></div><div class="grid cols-4"><article class="panel stat"><b>${docs.length}</b><small>Документов</small></article><article class="panel stat"><b>${docs.reduce((sum,x)=>sum+(x.tables_count||0),0)}</b><small>Распознано таблиц</small></article><article class="panel stat"><b>${docs.reduce((sum,x)=>sum+(x.subjects_count||0),0)}</b><small>Предметных разделов</small></article><article class="panel stat"><b>${docs.reduce((sum,x)=>sum+(x.warnings_count||0),0)}</b><small>Замечаний к данным</small></article></div><div class="panel top-gap">${docs.length?`<div class="table-wrap"><table><thead><tr><th>Документ</th><th>Год</th><th>Экзамен</th><th>Таблиц</th><th>Проблем</th><th>Дата</th></tr></thead><tbody>${docs.map(x=>`<tr class="row-click" data-exam-doc="${x.id}"><td><b>${esc(x.title||x.file_name)}</b><div class="small">${esc(x.file_name||'')}</div></td><td>${esc(x.academic_year||'—')}</td><td>${esc(x.exam_type||'—')}</td><td>${x.tables_count??0}</td><td>${x.warnings_count??0}</td><td>${fmtDate(x.created_at,true)}</td></tr>`).join('')}</tbody></table></div>`:empty('Документы ещё не загружены','Загрузите аналитическую справку ГИА, таблицу Excel или CSV.')}</div>`;
+  $('#examUpload').onclick=openExamWizard;
+  $('#examHistory').onclick=()=>showExamHistory(docs);
+  $$('[data-exam-doc]').forEach(row=>row.onclick=()=>openSavedAnalysis(row.dataset.examDoc));
+}
+
+renderExams = async function(){
+  const result=await sb.from('exam_documents').select('*').order('created_at',{ascending:false});queryError(result);
+  renderExamListV28(result.data||[]);
+};
+
+function showExamPageV28(title,body){
+  activeAnalysisViewV28=true;
+  $('#content').innerHTML=`<div class="analysis-page"><div class="toolbar analysis-page-toolbar"><div class="actions"><button id="examBack" class="ghost" type="button">← К списку анализов</button></div><div class="min-zero"><h3>${esc(title)}</h3></div></div>${body}</div>`;
+  $('#examBack').onclick=renderExams;
+  window.scrollTo({top:0,behavior:'auto'});
+}
+
+openExamWizard = function(){
+  showExamPageV28('Загрузка и анализ документа',`<div class="panel analysis-upload-panel"><div class="steps"><div class="step active">1. Файл</div><div class="step">2. Распознавание</div><div class="step">3. Проверка</div><div class="step">4. Сохранение</div></div><div class="drop"><input id="examFile" type="file" accept=".docx,.xlsx,.xls,.csv"><p>Поддерживаются DOCX с таблицами и текстом, Excel и CSV.</p></div><div class="grid cols-2"><label>Учебный год<input id="examYear" value="2025/2026"></label><label>Тип экзамена<select id="examType"><option>ГИА</option><option>ЕГЭ</option><option>ОГЭ</option><option>ГВЭ</option></select></label></div><div class="form-actions"><button id="analyzeExam" class="primary" type="button">Проанализировать</button></div></div><div id="examPreview" class="top-gap"></div>`);
+  $('#analyzeExam').onclick=analyzeExamFile;
+};
+
+analyzeExamFile = async function(){
+  const file=$('#examFile')?.files?.[0];if(!file){toast('Выберите файл','warn');return}
+  const btn=$('#analyzeExam');setBusy(btn,true,'Анализируем…');
+  try{
+    if(!window.ROOAnalysisEngine)throw new Error('Модуль анализа не загрузился.');
+    const extracted=await window.ROOAnalysisEngine.extractFile(file);
+    const analysis=window.ROOAnalysisEngine.analyze({...extracted,fileName:file.name,academicYear:$('#examYear').value,examType:$('#examType').value});
+    analysis.meta={...(analysis.meta||{}),fileName:file.name,academicYear:$('#examYear').value,examType:$('#examType').value,title:analysis.meta?.title||file.name,createdAt:new Date().toISOString()};
+    cache.analysis={analysis,file};
+    $('#examPreview').innerHTML=`<div class="panel analysis-result-panel"><div class="analysis-shell">${window.ROOAnalysisEngine.renderDashboard(analysis)}</div><div class="form-actions analysis-actions"><button id="saveExamAnalysis" class="primary" type="button">Сохранить анализ</button><button id="exportExamDocx" class="secondary" type="button">Скачать DOCX</button><button id="exportExamXlsx" class="secondary" type="button">Скачать Excel</button></div></div>`;
+    window.ROOAnalysisEngine.bindDashboard($('#examPreview'));
+    $('#saveExamAnalysis').onclick=saveExamAnalysis;$('#exportExamDocx').onclick=()=>exportAnalysisDocx(analysis);$('#exportExamXlsx').onclick=()=>exportAnalysisXlsx(analysis);
+    $('#examPreview').scrollIntoView({block:'start',behavior:'smooth'});
+  }catch(error){console.error(error);toast(error.message,'error')}finally{setBusy(btn,false)}
+};
+
+saveExamAnalysis = async function(){
+  const current=cache.analysis||{},analysis=current.analysis,file=current.file;if(!analysis||!file)return;
+  const button=$('#saveExamAnalysis');setBusy(button,true);
+  try{
+    const path=`${me.id}/exam-analysis/${Date.now()}-${fileSafe(file.name)}`;
+    const upload=await sb.storage.from('roo-exam-analysis').upload(path,file,{upsert:false});
+    if(upload.error)throw new Error(`Не удалось сохранить исходный файл: ${upload.error.message}`);
+    const payload={file_name:file.name,title:analysis.meta?.title||file.name,academic_year:analysis.meta?.academicYear,exam_type:analysis.meta?.examType,school_id:me.school_id||null,storage_path:path,analysis_json:analysis,tables_count:analysis.tables?.length||0,subjects_count:analysis.subjectResults?.length||0,warnings_count:analysis.warnings?.length||0,created_by:me.id};
+    queryError(await sb.from('exam_documents').insert(payload));
+    await audit('Загружен анализ экзаменов','exam_document','',{file:file.name});
+    cache.analysis=null;toast('Анализ сохранён');await renderExams();
+  }catch(error){toast(error.message,'error')}finally{setBusy(button,false)}
+};
+
+openSavedAnalysis = async function(id){
+  const documentRow=queryError(await sb.from('exam_documents').select('*').eq('id',id).single());
+  const analysis=documentRow.analysis_json;
+  if(!analysis||!Object.keys(analysis).length){toast('В документе нет сохранённого анализа','warn');return}
+  showExamPageV28(documentRow.title||documentRow.file_name,`<div id="savedAnalysis" class="panel analysis-result-panel"><div class="analysis-shell">${window.ROOAnalysisEngine.renderDashboard(analysis)}</div><div class="form-actions analysis-actions"><button id="savedDocx" class="primary" type="button">Скачать DOCX</button><button id="savedXlsx" class="secondary" type="button">Скачать Excel</button>${isRoo()?'<button id="deleteExam" class="danger" type="button">Удалить анализ</button>':''}</div></div>`);
+  window.ROOAnalysisEngine.bindDashboard($('#savedAnalysis'));
+  $('#savedDocx').onclick=()=>exportAnalysisDocx(analysis);$('#savedXlsx').onclick=()=>exportAnalysisXlsx(analysis);
+  if($('#deleteExam'))$('#deleteExam').onclick=async()=>{if(!confirm('Удалить этот анализ и исходный файл?'))return;const del=await sb.from('exam_documents').delete().eq('id',id);if(del.error)return toast(del.error.message,'error');if(documentRow.storage_path)await sb.storage.from('roo-exam-analysis').remove?.([documentRow.storage_path]);toast('Анализ удалён');renderExams()};
+};
+
+showExamHistory = function(rows){
+  showExamPageV28('История анализов',rows.length?`<div class="panel"><div class="table-wrap"><table><thead><tr><th>Файл</th><th>Год</th><th>Тип</th><th>Таблиц</th><th>Замечаний</th><th>Дата</th></tr></thead><tbody>${rows.map(x=>`<tr class="row-click" data-history-exam="${x.id}"><td>${esc(x.file_name)}</td><td>${esc(x.academic_year||'')}</td><td>${esc(x.exam_type||'')}</td><td>${x.tables_count??0}</td><td>${x.warnings_count??0}</td><td>${fmtDate(x.created_at,true)}</td></tr>`).join('')}</tbody></table></div></div>`:empty('История пуста','Сохранённые анализы появятся здесь.'));
+  $$('[data-history-exam]').forEach(row=>row.onclick=()=>openSavedAnalysis(row.dataset.historyExam));
+};
+
+renderReports = async function(){
+  const templates=queryError(await sb.from('report_templates').select('*').order('is_system',{ascending:false}));
+  $('#content').innerHTML=`<div class="toolbar"><div class="min-zero"><h3>Конструктор отчётов</h3><p class="small">Выберите шаблон, период и формат. Отчёт будет сформирован с заголовком, сводкой и оформленной таблицей.</p></div></div>${templates.length?`<div class="cards">${templates.map(template=>`<article class="entity-card"><h4>${esc(template.name)}</h4><p>${esc(template.config?.title||'Готовый шаблон')}</p><button class="primary" data-report="${template.report_type}" type="button">Сформировать</button></article>`).join('')}</div>`:empty('Шаблоны не найдены','Выполните финальный SQL V28.')}`;
+  $$('[data-report]').forEach(button=>button.onclick=()=>openReportBuilder(button.dataset.report));
+};
+
+buildReport = async function(type){
+  const button=$('#buildReport');setBusy(button,true,'Формируем…');
+  try{
+    const from=$('#reportFrom').value,to=$('#reportTo').value,format=$('#reportFormat').value,title=$('#reportTitle').value.trim()||'Отчёт';
+    if(!from||!to||new Date(from)>new Date(to))throw new Error('Проверьте период отчёта.');
+    let rows=[],columns=[];
+    if(type==='tasks_summary'){
+      rows=queryError(await sb.from('tasks').select('title,category,priority,status,due_at,created_at').gte('created_at',from).lte('created_at',to+'T23:59:59'));
+      columns=[['title','Поручение'],['category','Категория'],['priority','Приоритет'],['status','Статус'],['due_at','Срок'],['created_at','Создано']];
+    }else if(type==='departments_summary'){
+      rows=queryError(await sb.from('department_performance_v27').select('*'));
+      columns=[['department_name','Отдел'],['assigned_count','Поручений'],['accepted_count','Принято'],['returned_count','Возвратов'],['overdue_count','Просрочено'],['rating','Рейтинг, %']];
+    }else if(type==='school_card'){
+      rows=queryError(await sb.from('schools').select('*'));
+      columns=[['name','Школа'],['locality','Населённый пункт'],['students_total','Учеников'],['teachers_total','Педагогов'],['grade9_students','9 класс'],['grade11_students','11 класс'],['profile_status','Статус паспорта']];
+    }else{
+      const docs=queryError(await sb.from('exam_documents').select('*').gte('created_at',from).lte('created_at',to+'T23:59:59'));
+      rows=docs.map(x=>({title:x.title||x.file_name,academic_year:x.academic_year,exam_type:x.exam_type,tables_count:x.tables_count,warnings_count:x.warnings_count}));
+      columns=[['title','Документ'],['academic_year','Год'],['exam_type','Экзамен'],['tables_count','Таблиц'],['warnings_count','Замечаний']];
+    }
+    if(!rows.length)throw new Error('За выбранный период данных для отчёта нет.');
+    const headers=columns.map(x=>x[1]);
+    const values=rows.map(row=>columns.map(([key])=>key.endsWith('_at')?fmtDate(row[key],true):(STATUS_LABELS[row[key]]||(row[key]??''))));
+    if(format==='xlsx'){
+      if(!window.XLSX)throw new Error('Модуль Excel не загрузился.');
+      const data=rows.map(row=>Object.fromEntries(columns.map(([key,label])=>[label,key.endsWith('_at')?fmtDate(row[key],true):(STATUS_LABELS[row[key]]||(row[key]??''))])));
+      const workbook=XLSX.utils.book_new(),sheet=XLSX.utils.json_to_sheet(data);
+      sheet['!cols']=headers.map((header,index)=>({wch:Math.min(45,Math.max(header.length+3,...data.map(row=>String(row[header]??'').length+2)))}));
+      sheet['!autofilter']={ref:sheet['!ref']};
+      XLSX.utils.book_append_sheet(workbook,sheet,'Отчёт');XLSX.writeFile(workbook,`${fileSafe(title)}.xlsx`);
+    }else if(format==='docx'){
+      if(!window.ROODocxExporter?.exportTableReport)throw new Error('Модуль DOCX не загрузился.');
+      await window.ROODocxExporter.exportTableReport({title,period:`${from} — ${to}`,headers,rows:values,organization:branding.full_name,summary:[['Строк в отчёте',rows.length],['Период',`${from} — ${to}`]]},`${fileSafe(title)}.docx`);
+    }else{
+      const table=`<table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${values.map(row=>`<tr>${row.map(value=>`<td>${esc(value)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      const html=`<!doctype html><html lang="ru"><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:Arial,sans-serif;color:#173d2d;margin:32px}h1{text-align:center;color:#176b4d}p{text-align:center;color:#65766d}table{width:100%;border-collapse:collapse;margin-top:24px;font-size:12px}th,td{border:1px solid #9bafa1;padding:8px;vertical-align:top}th{background:#ddebe1}@media print{body{margin:12mm}}</style><h1>${esc(title)}</h1><p>${esc(branding.full_name)}<br>Период: ${esc(from)} — ${esc(to)}</p>${table}<p style="margin-top:50px;text-align:left">Начальник РОО __________________________</p></html>`;
+      const win=open('','_blank');if(!win)throw new Error('Браузер заблокировал окно печати. Разрешите всплывающие окна.');win.document.write(html);win.document.close();setTimeout(()=>win.print(),250);
+    }
+    await audit('Сформирован отчёт','report',type,{from,to,format});closeModal();toast('Отчёт сформирован');
+  }catch(error){toast(error.message,'error')}finally{setBusy(button,false)}
+};
+
+openReportBuilder = function(type){
+  modal(`<h2>Формирование отчёта</h2><div class="grid cols-2"><label>Период с<input id="reportFrom" type="date" value="${new Date(new Date().getFullYear(),0,1).toISOString().slice(0,10)}"></label><label>по<input id="reportTo" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Формат<select id="reportFormat"><option value="pdf">PDF / печать</option><option value="xlsx">Excel</option><option value="docx">DOCX</option></select></label><label>Заголовок<input id="reportTitle" value="${esc(PAGE_META.reports[0])}"></label></div><div class="form-actions"><button id="buildReport" class="primary" type="button">Сформировать</button><button class="ghost" type="button" data-close>Отмена</button></div>`);
+  $('#buildReport').onclick=()=>buildReport(type);$('[data-close]').onclick=closeModal;
+};
+
+renderCalendar = async function(){
+  const start=new Date(calendarCursorV28.getFullYear(),calendarCursorV28.getMonth(),1);
+  const end=new Date(start.getFullYear(),start.getMonth()+1,0,23,59,59);
+  const events=queryError(await sb.from('calendar_events').select('*').gte('starts_at',start.toISOString()).lte('starts_at',end.toISOString()).order('starts_at'));
+  const by={};events.forEach(event=>{const day=new Date(event.starts_at).getDate();(by[day]??=[]).push(event)});
+  const days=end.getDate(),offset=(start.getDay()+6)%7;
+  $('#content').innerHTML=`<div class="toolbar"><div class="actions"><button id="calPrev" class="ghost" type="button">←</button><button id="calToday" class="ghost" type="button">Сегодня</button><button id="calNext" class="ghost" type="button">→</button></div><h3>${start.toLocaleString('ru-RU',{month:'long',year:'numeric'})}</h3>${isRoo()?'<button id="newEvent" class="primary" type="button">+ Событие</button>':''}</div><div class="calendar-weekdays"><b>Пн</b><b>Вт</b><b>Ср</b><b>Чт</b><b>Пт</b><b>Сб</b><b>Вс</b></div><div class="calendar-grid">${Array(offset).fill('<div class="calendar-day calendar-empty"></div>').join('')}${Array.from({length:days},(_,index)=>`<div class="calendar-day" data-calendar-date="${new Date(start.getFullYear(),start.getMonth(),index+1).toISOString()}"><b>${index+1}</b>${(by[index+1]||[]).map(event=>`<button class="calendar-event" type="button" data-calendar-event="${event.id}" title="${esc(event.description||'')}">${esc(event.title)}</button>`).join('')}</div>`).join('')}</div>`;
+  $('#calPrev').onclick=()=>{calendarCursorV28=new Date(start.getFullYear(),start.getMonth()-1,1);renderCalendar()};
+  $('#calNext').onclick=()=>{calendarCursorV28=new Date(start.getFullYear(),start.getMonth()+1,1);renderCalendar()};
+  $('#calToday').onclick=()=>{calendarCursorV28=new Date();renderCalendar()};
+  if($('#newEvent'))$('#newEvent').onclick=()=>openEventCreate();
+  $$('[data-calendar-date]').forEach(day=>day.ondblclick=()=>isRoo()&&openEventCreate(day.dataset.calendarDate));
+  $$('[data-calendar-event]').forEach(button=>button.onclick=()=>{const event=events.find(x=>String(x.id)===String(button.dataset.calendarEvent));modal(`<h2>${esc(event.title)}</h2><p class="pre-wrap">${esc(event.description||'Описание не указано')}</p><div class="metric-list"><div class="metric-row"><span>Начало</span><b>${fmtDate(event.starts_at,true)}</b></div><div class="metric-row"><span>Окончание</span><b>${fmtDate(event.ends_at,true)}</b></div></div>`,false)});
+};
+
+openEventCreate = async function(initialDate=''){
+  const [schools,deps]=await Promise.all([loadSchools(),loadDepartments()]);
+  const initial=initialDate?new Date(initialDate):new Date();
+  modal(`<h2>Новое событие</h2><label>Название<input id="eventTitle" maxlength="180"></label><div class="grid cols-2"><label>Начало<input id="eventStart" type="datetime-local" value="${isoLocal(initial)}"></label><label>Окончание<input id="eventEnd" type="datetime-local"></label><label>Школа<select id="eventSchool"><option value="">Для всех</option>${schools.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label><label>Отдел<select id="eventDepartment"><option value="">Не выбран</option>${deps.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label></div><label>Описание<textarea id="eventDescription"></textarea></label><div class="form-actions"><button id="saveEvent" class="primary" type="button">Сохранить</button><button class="ghost" type="button" data-close>Отмена</button></div>`);
+  $('[data-close]').onclick=closeModal;
+  $('#saveEvent').onclick=async()=>{const button=$('#saveEvent');setBusy(button,true);try{const title=$('#eventTitle').value.trim(),start=$('#eventStart').value,end=$('#eventEnd').value;if(!title||!start)throw new Error('Укажите название и начало события.');if(end&&new Date(end)<new Date(start))throw new Error('Окончание не может быть раньше начала.');queryError(await sb.from('calendar_events').insert({title,description:$('#eventDescription').value.trim(),event_type:'event',starts_at:new Date(start).toISOString(),ends_at:end?new Date(end).toISOString():null,school_id:$('#eventSchool').value||null,department_id:$('#eventDepartment').value||null,created_by:me.id}));closeModal();renderCalendar()}catch(error){toast(error.message,'error')}finally{setBusy(button,false)}};
+};
+
+saveDocument = async function(){
+  const button=$('#saveDocument');setBusy(button,true,'Загружаем…');
+  try{
+    const file=$('#docFile').files[0],title=$('#docTitle').value.trim(),visibility=$('#docVisibility').value,school=$('#docSchool').value||null,department=$('#docDep').value||null;
+    if(!title)throw new Error('Введите название документа.');
+    if(file&&file.size>50*1024*1024)throw new Error('Размер файла превышает 50 МБ.');
+    if(visibility==='private'&&((school?1:0)+(department?1:0)!==1))throw new Error('Для частного документа выберите одну школу или один отдел.');
+    let path='',name='';
+    if(file){path=`${me.id}/documents/${Date.now()}-${fileSafe(file.name)}`;const upload=await sb.storage.from('roo-documents').upload(path,file,{upsert:false});if(upload.error)throw upload.error;name=file.name}
+    const payload={title,category:$('#docCat').value,document_number:$('#docNumber').value.trim()||null,document_date:$('#docDate').value||null,description:$('#docDescription').value.trim(),visibility,school_id:school,department_id:department,storage_path:path||null,file_name:name||null,created_by:me.id};
+    queryError(await sb.from('documents').insert(payload));await audit('Добавлен документ','document','',{title});closeModal();toast('Документ добавлен');renderDocuments();
+  }catch(error){toast(error.message,'error')}finally{setBusy(button,false)}
+};
+
+openUser = async function(id){
+  if(me.role!=='roo_head'){toast('Назначать роли может только начальник РОО','error');return}
+  const user=(await loadProfiles()).find(x=>x.id===id);if(!user)return;
+  const [schools,deps]=await Promise.all([loadSchools(),loadDepartments()]);
+  const own=id===me.id;
+  modal(`<h2>Настройка пользователя</h2><p><b>${esc(user.full_name||'')}</b><br>${esc(user.email||'')}</p>${own?'<div class="notice warn">Собственную роль и статус нельзя изменить из интерфейса — это защищает главный аккаунт.</div>':''}<div class="grid cols-2"><label>Роль<select id="userRole" ${own?'disabled':''}>${Object.entries(ROLE_LABELS).map(([role,label])=>`<option value="${role}" ${user.role===role?'selected':''}>${label}</option>`).join('')}</select></label><label>Статус<select id="userStatus" ${own?'disabled':''}><option value="pending" ${user.status==='pending'?'selected':''}>Ожидает</option><option value="active" ${user.status==='active'?'selected':''}>Активен</option><option value="blocked" ${user.status==='blocked'?'selected':''}>Заблокирован</option></select></label><label>Школа<select id="userSchool"><option value="">Не выбрана</option>${schools.map(s=>`<option value="${s.id}" ${user.school_id===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label><label>Отдел<select id="userDep"><option value="">Не выбран</option>${deps.map(d=>`<option value="${d.id}" ${user.department_id===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select></label></div><div class="form-actions"><button id="saveUser" class="primary" type="button" ${own?'disabled':''}>Сохранить доступ</button><button class="ghost" type="button" data-close>Отмена</button></div>`);
+  $('[data-close]').onclick=closeModal;
+  if(own)return;
+  $('#saveUser').onclick=async()=>{const button=$('#saveUser');setBusy(button,true);try{const role=$('#userRole').value,status=$('#userStatus').value;let school_id=$('#userSchool').value||null,department_id=$('#userDep').value||null;if(role.startsWith('school_')){department_id=null;if(!school_id)throw new Error('Для школьной роли выберите школу.')}else if(role.startsWith('department_')){school_id=null;if(!department_id)throw new Error('Для роли отдела выберите отдел.')}else if(role.startsWith('roo_')||role==='pending'){school_id=null;department_id=null}const result=await sb.rpc('assign_user_access_v28',{target_user:id,new_role:role,new_status:status,new_school:school_id,new_department:department_id});if(result.error)throw result.error;await audit('Назначена роль','profile',id,{role,status});cache.profiles=null;toast('Доступ обновлён');closeModal();renderUsers()}catch(error){toast(error.message,'error')}finally{setBusy(button,false)}};
+};
+
+saveBranding = async function(){
+  const button=$('#saveBranding');setBusy(button,true);
+  try{
+    const file=$('#brandingLogo').files[0];let logo_url=branding.logo_url||'';
+    if(file){if(file.size>5*1024*1024)throw new Error('Логотип больше 5 МБ.');const path=`${me.id}/branding/logo-${Date.now()}-${fileSafe(file.name)}`;const upload=await sb.storage.from('roo-public').upload(path,file,{upsert:false});if(upload.error)throw upload.error;logo_url=sb.storage.from('roo-public').getPublicUrl(path).data.publicUrl}
+    const value={logo_url,background:$('#brandingBackground').value,padding:Number($('#brandingPadding').value),short_name:$('#brandingShort').value.trim()||'Ачхой-Мартан',subtitle:$('#brandingSubtitle').value.trim()||'Отдел образования',full_name:$('#brandingFull').value.trim()||'Отдел образования Ачхой-Мартановского района'};
+    queryError(await sb.from('site_settings').upsert({key:'branding',value,updated_by:me.id,updated_at:new Date().toISOString()}));branding=value;applyBranding();toast('Оформление сохранено')
+  }catch(error){toast(error.message,'error')}finally{setBusy(button,false)}
+};
+
+showNotifications = async function(){
+  const notifications=queryError(await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(50));
+  modal(`<div class="section-title"><h2>Уведомления</h2>${notifications.some(x=>!x.is_read)?'<button id="readAll" class="secondary" type="button">Отметить всё прочитанным</button>':''}</div>${notifications.length?`<div class="timeline notification-list">${notifications.map(x=>`<button type="button" class="timeline-item notification-item ${x.is_read?'is-read':''}" data-notification="${x.id}" data-page="${esc(x.link_page||'')}"><i></i><span><b>${esc(x.title)}</b><span class="pre-wrap">${esc(x.body||'')}</span><small>${fmtDate(x.created_at,true)}</small></span></button>`).join('')}</div>`:empty('Уведомлений нет','Новые события появятся здесь.')}`);
+  const mark=async ids=>{if(!ids.length)return;const result=await sb.rpc('mark_notifications_read_v28',{notification_ids:ids});if(result.error)throw result.error;await refreshNotifications()};
+  if($('#readAll'))$('#readAll').onclick=async()=>{try{await mark(notifications.filter(x=>!x.is_read).map(x=>x.id));closeModal()}catch(error){toast(error.message,'error')}};
+  $$('[data-notification]').forEach(button=>button.onclick=async()=>{try{await mark([button.dataset.notification]);const page=button.dataset.page;closeModal();if(page&&PAGE_META[page])navigate(page)}catch(error){toast(error.message,'error')}});
+};
+/* ==================== V28.3 FINAL FUNCTIONAL OVERRIDES ==================== */
+
+saveNewTask = async function(){
+  const button=$('#saveTask');setBusy(button,true,'Создаём…');
+  try{
+    const title=$('#taskTitle').value.trim(),type=$('#taskTargetType').value,dueValue=$('#taskDue').value,target=$('#taskTarget').value;
+    if(!title)throw new Error('Введите название поручения.');
+    if(!dueValue)throw new Error('Укажите дату и время исполнения поручения.');
+    if(type!=='all_schools'&&!target)throw new Error('Выберите получателя поручения.');
+    const due=new Date(dueValue);if(Number.isNaN(due.getTime()))throw new Error('Указан некорректный срок.');
+    const payload={title,description:$('#taskDescription').value.trim(),instructions:$('#taskInstructions').value.trim(),category:$('#taskCategory').value,priority:$('#taskPriority').value,due_at:due.toISOString(),created_by:me.id,updated_by:me.id,requires_director_approval:$('#taskDirectorApproval').checked,assigned_to_all_schools:type==='all_schools',status:'new'};
+    if(type==='school')payload.assigned_school_id=target;if(type==='department')payload.assigned_department_id=target;
+    const task=queryError(await sb.from('tasks').insert(payload).select().single());
+    let recipients=[];
+    if(type==='all_schools')recipients=(await loadSchools()).map(s=>({task_id:task.id,school_id:s.id,status:'new'}));
+    else if(type==='school')recipients=[{task_id:task.id,school_id:target,status:'new'}];
+    else recipients=[{task_id:task.id,department_id:target,status:'new'}];
+    if(!recipients.length)throw new Error('Получатели не найдены. Добавьте школы или выберите отдел.');
+    queryError(await sb.from('task_recipients').insert(recipients));
+    const notifications=recipients.map(row=>({school_id:row.school_id||null,department_id:row.department_id||null,title:'Новое поручение',body:`${title}. Срок: ${fmtDate(due,true)}`,link_page:'tasks',entity_id:task.id}));
+    const notice=await sb.from('notifications').insert(notifications);if(notice.error)console.warn(notice.error);
+    await audit('Создано поручение','task',task.id,{title,recipients:recipients.length,due_at:due.toISOString()});
+    closeModal();toast('Поручение создано');renderTasks();
+  }catch(error){toast(error.message,'error')}finally{setBusy(button,false)}
+};
+
+openSchool = async function(id,own=false){
+  const school=id?queryError(await sb.from('schools').select('*').eq('id',id).single()):{};
+  const history=id?await sb.from('school_history').select('*,profiles(full_name)').eq('school_id',id).order('created_at',{ascending:false}).limit(20):{data:[]};
+  const editable=isRoo()||(me.role==='school_director'&&me.school_id===id);
+  const input=(key,label,type='text',extra='')=>`<label>${label}<input data-school-field="${key}" type="${type}" value="${esc(school[key]??'')}" ${type==='number'?'min="0" step="1"':''} ${extra} ${editable?'':'disabled'}></label>`;
+  const check=(key,label)=>`<label class="checkbox-label"><input data-school-check="${key}" type="checkbox" ${school[key]?'checked':''} ${editable?'':'disabled'}> <span>${label}</span></label>`;
+  modal(`<div class="section-title"><div class="min-zero"><h2>${esc(school.name||'Новая школа')}</h2><span class="small">Заполненность паспорта: ${schoolPercent(school)}%</span></div>${school.profile_status?badge(school.profile_status):''}</div><div class="tabs school-tabs" id="schoolTabs"><button type="button" class="tab active" data-stab="main">Основное</button><button type="button" class="tab" data-stab="students">Ученики</button><button type="button" class="tab" data-stab="infra">Инфраструктура</button><button type="button" class="tab" data-stab="history">История</button></div><section data-sp="main"><div class="grid cols-2">${input('code','Код образовательной организации')}${input('name','Полное название')}${input('short_name','Краткое название')}${input('locality','Населённый пункт')}${input('address','Адрес')}${input('phone','Телефон','tel')}${input('email','Электронная почта','email')}${input('website','Сайт','url')}${input('director_name','Ф.И.О. директора')}${input('deputy_names','Заместители')}${input('responsible_name','Ответственный за отчётность')}${input('responsible_phone','Телефон ответственного','tel')}</div></section><section data-sp="students" hidden><div class="grid cols-3">${input('students_total','Всего учеников','number')}${input('classes_total','Количество классов','number')}${input('teachers_total','Педагогов','number')}${[1,2,3,4,5,6,7,8,9,10,11].map(n=>input(`grade${n}_students`,`${n} класс`,'number')).join('')}</div></section><section data-sp="infra" hidden><div class="grid cols-2">${input('capacity','Проектная вместимость','number')}${input('shifts_count','Количество смен','number')}${input('internet_quality','Качество интернета')}${input('building_condition','Состояние здания')}${check('has_meals','Организовано питание')}${check('has_transport','Есть школьный транспорт')}</div><label>Примечание<textarea data-school-field="notes" ${editable?'':'disabled'}>${esc(school.notes||'')}</textarea></label></section><section data-sp="history" hidden>${(history.data||[]).length?`<div class="timeline">${history.data.map(row=>`<div class="timeline-item"><i></i><div><b>${esc(row.action)}</b><div class="small">${esc(row.profiles?.full_name||'Система')} · ${fmtDate(row.created_at,true)}</div></div></div>`).join('')}</div>`:empty('История пуста','Изменения паспорта появятся здесь.')}</section>${editable?`<div class="form-actions top-gap"><button id="saveSchool" class="primary" type="button">Сохранить</button>${me.role==='school_director'?'<button id="submitSchool" class="secondary" type="button">Отправить на утверждение</button>':''}${isRoo()&&id?'<button id="approveSchool" class="secondary" type="button">Утвердить паспорт</button>':''}<button class="ghost" data-close type="button">Закрыть</button></div>`:''}`);
+  $$('[data-stab]').forEach(button=>button.onclick=()=>{$$('[data-stab]').forEach(x=>x.classList.toggle('active',x===button));$$('[data-sp]').forEach(section=>section.hidden=section.dataset.sp!==button.dataset.stab)});
+  if($('[data-close]'))$('[data-close]').onclick=closeModal;
+  if($('#saveSchool'))$('#saveSchool').onclick=()=>saveSchool(id,school);
+  if($('#submitSchool'))$('#submitSchool').onclick=()=>saveSchool(id,school,'submitted');
+  if($('#approveSchool'))$('#approveSchool').onclick=()=>saveSchool(id,school,'approved');
+};
+
+saveSchool = async function(id,old,status){
+  const button=status==='approved'?$('#approveSchool'):status==='submitted'?$('#submitSchool'):$('#saveSchool');setBusy(button,true);
+  try{
+    const payload={};
+    $$('[data-school-field]').forEach(input=>{let value=input.value.trim();if(input.type==='number')value=value===''?null:Number(value);payload[input.dataset.schoolField]=value});
+    $$('[data-school-check]').forEach(input=>payload[input.dataset.schoolCheck]=input.checked);
+    if(!payload.name)throw new Error('Укажите полное название школы.');
+    for(const [key,value] of Object.entries(payload))if(typeof value==='number'&&(!Number.isFinite(value)||value<0))throw new Error('Числовые показатели не могут быть отрицательными.');
+    const grades=[1,2,3,4,5,6,7,8,9,10,11].reduce((sum,n)=>sum+(Number(payload[`grade${n}_students`])||0),0);
+    if(payload.students_total!=null&&grades>payload.students_total)throw new Error('Сумма учеников по классам больше общего количества учеников.');
+    if(status)payload.profile_status=status;if(status==='approved'){payload.approved_by=me.id;payload.approved_at=new Date().toISOString()}
+    const result=id?await sb.from('schools').update(payload).eq('id',id).select().single():await sb.from('schools').insert(payload).select().single();
+    const saved=queryError(result);
+    queryError(await sb.from('school_history').insert({school_id:saved.id,changed_by:me.id,action:status==='approved'?'Паспорт утверждён':status==='submitted'?'Паспорт отправлен на утверждение':'Паспорт школы обновлён',snapshot:saved}));
+    await audit('Изменён паспорт школы','school',saved.id,{status:status||'saved'});cache.schools=null;toast('Данные школы сохранены');closeModal();currentPage==='schools'?renderSchools():renderMySchool();
+  }catch(error){toast(error.message,'error')}finally{setBusy(button,false)}
+};
+
+renderRating = async function(){
+  const result=await sb.from('school_performance_v27').select('*').order('rating',{ascending:false,nullsFirst:false});queryError(result);const rows=result.data||[];
+  $('#content').innerHTML=`<div class="panel"><div class="section-title"><div class="min-zero"><h3>Рейтинг школ</h3><p class="small">Показатель появляется только после реального исполнения поручений. Школы без данных не получают автоматические 100%.</p></div>${rows.length?'<button id="ratingCsv" class="secondary" type="button">Скачать CSV</button>':''}</div>${rows.length?`<div class="table-wrap"><table><thead><tr><th>№</th><th>Школа</th><th>Поручений</th><th>Принято</th><th>Возвратов</th><th>Просрочено</th><th>Рейтинг</th></tr></thead><tbody>${rows.map((row,index)=>`<tr><td>${index+1}</td><td>${esc(row.school_name)}</td><td>${row.assigned_count??0}</td><td>${row.accepted_count??0}</td><td>${row.returned_count??0}</td><td>${row.overdue_count??0}</td><td>${row.rating==null?'<span class="small">Не рассчитан</span>':`<b class="${row.rating>=80?'rating-good':row.rating>=60?'rating-mid':'rating-bad'}">${row.rating}%</b>`}</td></tr>`).join('')}</tbody></table></div>`:empty('Рейтинг ещё не рассчитан','Он появится после создания поручений и проверки ответов школ.')}</div>`;
+  if($('#ratingCsv'))$('#ratingCsv').onclick=()=>download(new Blob(['\ufeffШкола;Поручений;Принято;Возвратов;Просрочено;Рейтинг\r\n'+rows.map(row=>[row.school_name,row.assigned_count??0,row.accepted_count??0,row.returned_count??0,row.overdue_count??0,row.rating??''].map(value=>`"${String(value).replaceAll('"','""')}"`).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}),'Рейтинг_школ.csv');
+};
+
+renderUsers = async function(){
+  if(me.role!=='roo_head'){ $('#content').innerHTML=empty('Нет доступа','Назначать роли и управлять аккаунтами может только начальник РОО.');return }
+  const rows=await loadProfiles(true);
+  $('#content').innerHTML=`<div class="toolbar"><div class="filters"><input id="userSearch" placeholder="Поиск по Ф.И.О. или почте"><select id="userRoleFilter"><option value="">Все роли</option>${Object.entries(ROLE_LABELS).map(([key,value])=>`<option value="${key}">${value}</option>`).join('')}</select><select id="userStatusFilter"><option value="">Все статусы</option><option value="pending">Ожидает</option><option value="active">Активен</option><option value="blocked">Заблокирован</option></select></div></div><div id="usersTable"></div>`;
+  const draw=()=>{const search=$('#userSearch').value.toLowerCase(),role=$('#userRoleFilter').value,status=$('#userStatusFilter').value;const filtered=rows.filter(user=>(!search||`${user.full_name||''} ${user.email||''}`.toLowerCase().includes(search))&&(!role||user.role===role)&&(!status||user.status===status));$('#usersTable').innerHTML=filtered.length?`<div class="table-wrap"><table><thead><tr><th>Пользователь</th><th>Роль</th><th>Организация</th><th>Статус</th><th></th></tr></thead><tbody>${filtered.map(user=>`<tr><td><b>${esc(user.full_name||'Без имени')}</b><br><span class="small">${esc(user.email||'')}</span></td><td>${esc(ROLE_LABELS[user.role]||user.role)}</td><td>${esc(user.schools?.name||user.departments?.name||'—')}</td><td>${badge(user.status)}</td><td><button class="link-btn" data-user="${user.id}" type="button">Настроить</button></td></tr>`).join('')}</tbody></table></div>`:empty('Пользователи не найдены','Измените фильтр или дождитесь новых заявок.');$$('[data-user]').forEach(button=>button.onclick=()=>openUser(button.dataset.user))};
+  draw();$('#userSearch').oninput=draw;$('#userRoleFilter').onchange=draw;$('#userStatusFilter').onchange=draw;
+};
+
+openAppeal = async function(id){
+  const deps=await loadDepartments(),appeal=id?queryError(await sb.from('appeals').select('*').eq('id',id).single()):{};
+  modal(`<h2>${id?'Обращение':'Новое обращение'}</h2><div class="grid cols-2"><label>Номер<input id="appealNumber" value="${esc(appeal.number||'')}"></label><label>Заявитель<input id="appealApplicant" value="${esc(appeal.applicant_name||'')}"></label><label>Контакты<input id="appealContacts" value="${esc(appeal.applicant_contacts||'')}"></label><label>Срок<input id="appealDue" type="date" value="${appeal.due_at?String(appeal.due_at).slice(0,10):''}"></label><label>Отдел<select id="appealDep"><option value="">Не выбран</option>${deps.map(dep=>`<option value="${dep.id}" ${appeal.assigned_department_id===dep.id?'selected':''}>${esc(dep.name)}</option>`).join('')}</select></label><label>Статус<select id="appealStatus">${['new','in_progress','answered','closed','returned'].map(status=>`<option value="${status}" ${appeal.status===status?'selected':''}>${STATUS_LABELS[status]}</option>`).join('')}</select></label></div><label>Тема<input id="appealSubject" maxlength="250" value="${esc(appeal.subject||'')}"></label><label>Текст обращения<textarea id="appealMessage">${esc(appeal.message||'')}</textarea></label><label>Ответ<textarea id="appealResponse">${esc(appeal.response_text||'')}</textarea></label><div class="form-actions"><button id="saveAppeal" class="primary" type="button">Сохранить</button><button class="ghost" data-close type="button">Отмена</button></div>`);
+  $('[data-close]').onclick=closeModal;
+  $('#saveAppeal').onclick=async()=>{const button=$('#saveAppeal');setBusy(button,true);try{const subject=$('#appealSubject').value.trim(),status=$('#appealStatus').value,response=$('#appealResponse').value.trim();if(!subject)throw new Error('Введите тему обращения.');if(['answered','closed'].includes(status)&&!response)throw new Error('Для статуса «Ответ дан» или «Закрыто» заполните ответ.');const payload={number:$('#appealNumber').value.trim()||null,applicant_name:$('#appealApplicant').value.trim(),applicant_contacts:$('#appealContacts').value.trim(),subject,message:$('#appealMessage').value.trim(),status,due_at:$('#appealDue').value?new Date($('#appealDue').value+'T12:00:00').toISOString():null,assigned_department_id:$('#appealDep').value||null,response_text:response,created_by:appeal.created_by||me.id};queryError(id?await sb.from('appeals').update(payload).eq('id',id):await sb.from('appeals').insert(payload));await audit(id?'Обращение обновлено':'Обращение создано','appeal',id||'',{subject,status});closeModal();renderAppeals()}catch(error){toast(error.message,'error')}finally{setBusy(button,false)}};
+};
+
+openInspection = async function(id){
+  const schools=await loadSchools(),inspection=id?queryError(await sb.from('inspections').select('*').eq('id',id).single()):{};
+  modal(`<h2>${id?'Проверка':'Новая проверка'}</h2><div class="grid cols-2"><label>Школа<select id="inspectionSchool"><option value="">Выберите школу</option>${schools.map(school=>`<option value="${school.id}" ${inspection.school_id===school.id?'selected':''}>${esc(school.name)}</option>`).join('')}</select></label><label>Название<input id="inspectionTitle" maxlength="250" value="${esc(inspection.title||'')}"></label><label>Тип<input id="inspectionType" value="${esc(inspection.inspection_type||'')}"></label><label>Дата<input id="inspectionDate" type="datetime-local" value="${inspection.planned_at?isoLocal(inspection.planned_at):''}"></label><label>Проверяющие<input id="inspectionPeople" value="${esc(inspection.inspectors||'')}"></label><label>Статус<select id="inspectionStatus">${['planned','in_progress','completed','cancelled'].map(status=>`<option value="${status}" ${inspection.status===status?'selected':''}>${STATUS_LABELS[status]}</option>`).join('')}</select></label></div><label>Выявленные нарушения<textarea id="inspectionFindings">${esc(inspection.findings||'')}</textarea></label><label>Рекомендации<textarea id="inspectionRecommendations">${esc(inspection.recommendations||'')}</textarea></label>${isRoo()?'<div class="form-actions"><button id="saveInspection" class="primary" type="button">Сохранить</button><button class="ghost" data-close type="button">Отмена</button></div>':''}`);
+  if($('[data-close]'))$('[data-close]').onclick=closeModal;
+  if($('#saveInspection'))$('#saveInspection').onclick=async()=>{const button=$('#saveInspection');setBusy(button,true);try{const school_id=$('#inspectionSchool').value,title=$('#inspectionTitle').value.trim(),status=$('#inspectionStatus').value;if(!school_id||!title)throw new Error('Выберите школу и укажите название проверки.');if(status==='completed'&&!$('#inspectionFindings').value.trim()&&!$('#inspectionRecommendations').value.trim())throw new Error('Для завершённой проверки укажите результаты или рекомендации.');const payload={school_id,title,inspection_type:$('#inspectionType').value.trim(),planned_at:$('#inspectionDate').value?new Date($('#inspectionDate').value).toISOString():null,inspectors:$('#inspectionPeople').value.trim(),status,findings:$('#inspectionFindings').value.trim(),recommendations:$('#inspectionRecommendations').value.trim(),created_by:inspection.created_by||me.id,completed_at:status==='completed'?(inspection.completed_at||new Date().toISOString()):null};queryError(id?await sb.from('inspections').update(payload).eq('id',id):await sb.from('inspections').insert(payload));await audit(id?'Проверка обновлена':'Проверка создана','inspection',id||'',{title,status});closeModal();renderInspections()}catch(error){toast(error.message,'error')}finally{setBusy(button,false)}};
+};
+
+previewBrandingLogo = async function(){
+  const file=$('#brandingLogo')?.files?.[0];if(!file)return;if(file.size>5*1024*1024){toast('Логотип больше 5 МБ.','error');$('#brandingLogo').value='';return}
+  const img=$('#settingsLogoImage'),fallback=$('.brand-fallback',$('#settingsLogoPreview')),url=URL.createObjectURL(file);img.src=url;img.hidden=false;fallback.hidden=true;img.onload=()=>URL.revokeObjectURL(url);img.onerror=()=>{URL.revokeObjectURL(url);img.hidden=true;fallback.hidden=false;toast('Не удалось открыть изображение логотипа.','error')};
+  try{const detected=await window.ROOAnalysisEngine.detectLogoBackground(file);if(!detected.transparent){const canvas=document.createElement('canvas').getContext('2d');canvas.fillStyle=detected.background;$('#brandingBackground').value=rgbToHex(canvas.fillStyle)}}catch(error){console.warn(error)}updateLogoPreview();
+};
+
+/* ==================== END V28.3 FINAL FUNCTIONAL OVERRIDES ==================== */
+
+/* ==================== END V28 FINAL AUDIT OVERRIDES ==================== */
 
 window.addEventListener('DOMContentLoaded',boot);
 })();

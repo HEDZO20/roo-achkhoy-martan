@@ -1,0 +1,24 @@
+ROO V28.3 — TEST REPORT
+
+PASS: app.js syntax.
+PASS: analysis-engine.js syntax.
+PASS: docx-export.js syntax.
+PASS: 192 role/page/viewport cases.
+PASS: 0 fallback screens.
+PASS: 0 JavaScript errors in role audit.
+PASS: 0 real horizontal overflow cases after final CSS correction.
+PASS: desktop analysis has 8 tabs; every tab shows exactly 1 panel.
+PASS: mobile analysis has 8 tabs; every tab shows exactly 1 panel.
+PASS: analysis is not opened in a dialog.
+PASS: analysis source max-height is none; page uses browser scrolling.
+PASS: desktop document width 1440 equals viewport 1440.
+PASS: mobile document width 390 equals viewport 390.
+PASS: generic DOCX created and validated with python-docx.
+PASS: GitHub Pages workflow YAML parsed successfully.
+PASS: all local HTML asset references exist.
+PASS: no duplicate HTML IDs.
+PASS: no secret/service_role key patterns in public files.
+
+NOTE: Full live RLS behavior depends on the actual Supabase project and must be checked once after applying PATCH_V28_FINAL_AUDIT.sql.
+PASS: primary creation forms open for tasks, schools, documents, appeals, meetings and inspections.
+PASS: analysis test document recognized 23 tables, 12 subject tables, 28 schools, 37 high-score records, 12 OGE rows and 14 data-quality warnings.

@@ -143,5 +143,53 @@ X.export=async function(analysis,branding,fileName='Аналитический_�
   const blob=await X.createBlob(analysis,branding),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fileName;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
 };
 
+
+function genericDocumentXml(options={}){
+  const title=options.title||'Отчёт';
+  const subtitle=options.subtitle||'';
+  const period=options.period||'';
+  const headers=(options.headers||[]).map(String);
+  const rows=(options.rows||[]).map(row=>headers.map((h,i)=>row?.[h]??row?.[i]??''));
+  const summary=(options.summary||[]).map(item=>Array.isArray(item)?item:[item.label,item.value]);
+  const notes=(options.notes||[]).filter(Boolean);
+  const widths=headers.map((_,i)=>options.widths?.[i]||Math.max(750,Math.floor(9000/Math.max(headers.length,1))));
+  const body=[
+    paragraph(options.organization||'Отдел образования Ачхой-Мартановского района',{bold:true,size:30,color:'176B4D',align:'center',before:900,after:240}),
+    paragraph(title,{bold:true,size:38,align:'center',after:200}),
+    subtitle?paragraph(subtitle,{size:24,align:'center',after:140}):'',
+    period?paragraph(`Период: ${period}`,{size:21,color:'66786E',align:'center',after:500}):'',
+    paragraph(`Сформировано: ${new Date().toLocaleDateString('ru-RU')}`,{size:19,color:'66786E',align:'center',after:700}),
+    summary.length?heading('Основные показатели'):'',
+    summary.length?table(['Показатель','Значение'],summary,[6200,2200]):'',
+    notes.length?heading('Выводы и примечания'):'',
+    notes.map(note=>paragraph(`• ${note}`,{size:21,after:80})).join(''),
+    heading('Данные отчёта'),
+    rows.length&&headers.length?table(headers,rows,widths):paragraph('Данные за выбранный период отсутствуют.',{italic:true,color:'66786E'}),
+    paragraph('',{after:250}),
+    paragraph('Начальник РОО: ________________________________',{size:22,after:160}),
+    paragraph('Дата: ____________________',{size:22})
+  ].join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="850" w:right="700" w:bottom="850" w:left="700"/></w:sectPr></w:body></w:document>`;
+}
+
+X.createTableReportBlob=async function(options={}){
+  const contentTypes=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
+  const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`;
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:sz w:val="22"/><w:lang w:val="ru-RU"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="100" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>`;
+  const now=new Date().toISOString();
+  const core=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xml(options.title||'Отчёт')}</dc:title><dc:creator>${xml(options.organization||'Отдел образования')}</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`;
+  const app=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>РОО V28.3 Final Audit</Application></Properties>`;
+  return new Blob([zipStore([
+    {name:'[Content_Types].xml',data:contentTypes},{name:'_rels/.rels',data:rootRels},
+    {name:'word/document.xml',data:genericDocumentXml(options)},{name:'word/_rels/document.xml.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'},
+    {name:'word/styles.xml',data:styles},{name:'docProps/core.xml',data:core},{name:'docProps/app.xml',data:app}
+  ])],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+};
+
+X.exportTableReport=async function(options={},fileName='Отчёт.docx'){
+  const blob=await X.createTableReportBlob(options),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=fileName;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+};
+
 global.ROODocxExporter=X;
 })(window);
